@@ -1,8 +1,8 @@
 {
-    "recommendations": [
-        "PKief.material-icon-theme",
-        "ms-python.python",
-        "formulahendry.code-runner",
-        "ms-python.autopep8"
-    ]
+  "recommendations": [
+    "PKief.material-icon-theme",
+    "ms-python.python",
+    "formulahendry.code-runner",
+    "ms-python.autopep8"
+  ]
 }

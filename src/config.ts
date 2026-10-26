@@ -1,34 +1,60 @@
-export interface TokenConfig {
-  TICKER: string; // Короткое имя для логов (например, "SOL", "JUP")
-  MINT: string; // Адрес смарт-контракта (Mint Address) в Solana
-  USDC_ALLOCATION: number; // Сколько долларов (USDC) выделять на ОДНУ сделку по этой монете
-  SLIPPAGE_BPS: number; // Допустимое проскальзывание для этой монеты (100 = 1%)
 
-  // Параметры вашей стратегии скальпинга (переносим логику флета)
-  TAKE_PROFIT_PCT: number; // Процент профита для выхода
-  STOP_LOSS_PCT: number; // Процент стоп-лосса
-  CHECK_INTERVAL_MS: number; // Как часто проверять цену (в миллисекундах)
+export interface DexCoinConfig {
+  SYMBOL: string;
+  TOKEN_MINT: string;
+  POOL_ADDRESS: string;
+
+  // Только параметры будущей бумажной торговли
+  USDC_QUANTITY: number;
+  STOP_LOSS_PCT: number;
+  BUY_RANGE: number;
+  SELL_RANGE: number;
+
+  MIN_NOTIONAL: number;
+  TRADE_INTERVAL_MS: number;
+  INTERVAL_AFTER_STOPLOSS_MS: number;
+  ORDER_TIMEOUT_MS: number;
+
+  ANALIZE_INTERVAL_CANDLES: number;
+  CANDLES_INTERVAL: "1m" | "5m" | "10m" | "15m" | "1h";
+  LOOCAL_LOOKBACK: number;
+
+  MIN_RANGE_PCT: number;
+  MAX_RANGE_PCT: number;
 }
 
-// Глобальные настройки самого бота
-export const BOT_GLOBAL_CONFIG = {
-  // Базовый стейблкоин, с которого бот берет средства для торговли
-  BASE_STABLE_MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Официальный USDC
-  BASE_STABLE_DECIMALS: 6, // У USDC всегда 6 знаков после запятой
+export const QUOTE_TOKEN = {
+  SYMBOL: "USDC",
+  MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+} as const;
 
-  // Защитная пауза после срабатывания Стоп-Лосса (например, 5 минут)
-  COOLDOWN_AFTER_STOPLOSS_MS: 5 * 60 * 60 * 1000,
-};
+// Флаг сам по себе не защищает от транзакций.
+// На этом этапе код исполнения сделок не подключаем.
+export const PAPER_TRADING = true;
 
-// Список монет, которые бот будет сканировать и торговать параллельно
-export const TOKENS_TO_TRADE: TokenConfig[] = [
+export const COINS_CONFIG: DexCoinConfig[] = [
   {
-    TICKER: "BatCat",
-    MINT: "HCkhfdDNF2dqMxxtL51AzgWU26MBNkUkEzGAHtqkpump", // Токен агрегатора Jupiter
-    USDC_ALLOCATION: 2,
-    SLIPPAGE_BPS: 20, // 0.5% проскальзывание
-    TAKE_PROFIT_PCT: 2.0,
-    STOP_LOSS_PCT: 1.2,
-    CHECK_INTERVAL_MS: 15000,
+    SYMBOL: "HELL", // отображаемый тикер; идентичность задаётся mint
+    TOKEN_MINT:
+      "A75Xx6SeftAmWduv9KGwb2GCjXUAhxozcCUCys9jpump",
+    POOL_ADDRESS:
+      "EwsYHiuznyNqH5f65YpfsoQBLq2KyETuvhm5un7wsfDG",
+
+    USDC_QUANTITY: 5,
+    STOP_LOSS_PCT: 10,
+    BUY_RANGE: 0.25,
+    SELL_RANGE: 0.75,
+
+    MIN_NOTIONAL: 1.5,
+    TRADE_INTERVAL_MS: 60_000,
+    INTERVAL_AFTER_STOPLOSS_MS: 300_000,
+    ORDER_TIMEOUT_MS: 60_000,
+
+    ANALIZE_INTERVAL_CANDLES: 120,
+    CANDLES_INTERVAL: "15m",
+    LOOCAL_LOOKBACK: 3,
+
+    MIN_RANGE_PCT: 1,
+    MAX_RANGE_PCT: 20,
   },
 ];

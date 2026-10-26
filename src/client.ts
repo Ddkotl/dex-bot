@@ -24,10 +24,14 @@ function getWalletKeypair(keyRaw: string): Keypair {
       return Keypair.fromSecretKey(bs58.decode(keyRaw.trim()));
     }
   } catch (err) {
-    throw new Error("❌ Критическая ошибка: Неверный формат приватного ключа в .env");
+    throw new Error(
+      "❌ Критическая ошибка: Неверный формат приватного ключа в .env",
+    );
   }
 }
 
 export const botWallet = getWalletKeypair(privateKeyRaw);
 
-console.log(`✅ Бот успешно подключен. Публичный адрес кошелька: ${botWallet.publicKey.toString()}`);
+console.log(
+  `✅ Бот успешно подключен. Публичный адрес кошелька: ${botWallet.publicKey.toString()}`,
+);

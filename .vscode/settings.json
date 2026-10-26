@@ -1,15 +1,15 @@
 {
-    "workbench.iconTheme": "material-icon-theme",
-    "workbench.colorTheme": "GitHub Dark",
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "ms-python.autopep8",
-    "editor.minimap.enabled": false,
-    "editor.glyphMargin": false,
-    "[python]": {
-        "diffEditor.ignoreTrimWhitespace": false,
-        "editor.formatOnType": true,
-        "editor.wordBasedSuggestions": "off"
-    },
-    "code-runner.clearPreviousOutput": true,
-    "code-runner.saveFileBeforeRun": true
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.colorTheme": "GitHub Dark",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "ms-python.autopep8",
+  "editor.minimap.enabled": false,
+  "editor.glyphMargin": false,
+  "[python]": {
+    "diffEditor.ignoreTrimWhitespace": false,
+    "editor.formatOnType": true,
+    "editor.wordBasedSuggestions": "off"
+  },
+  "code-runner.clearPreviousOutput": true,
+  "code-runner.saveFileBeforeRun": true
 }
