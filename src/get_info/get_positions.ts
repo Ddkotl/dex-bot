@@ -1,10 +1,7 @@
 import DLMM from "@meteora-ag/dlmm";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import {pub_wallet_connection} from "../client/pub_wallet_connect"
 
-const connection = new Connection(
-  process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
-  "confirmed"
-);
 
 export interface Dlmmpresentation {
   positionAddress: string;
@@ -23,14 +20,15 @@ export interface Dlmmpresentation {
  */
 export async function getActiveLimitPositions(
   poolAddress: string,
-  walletAddress: string
+  walletAddress: string,
+  DECEMIALS : number
 ): Promise<Dlmmpresentation[]> {
   try {
     const poolPubKey = new PublicKey(poolAddress.trim());
     const userPubKey = new PublicKey(walletAddress.trim());
 
     // 1. Инициализируем пул Meteora из сети Solana
-    const dlmmPool = await DLMM.create(connection, poolPubKey);
+    const dlmmPool = await DLMM.create(pub_wallet_connection, poolPubKey);
 
     // 2. Вызываем корректный метод SDK для получения позиций именно по этой паре
     const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(userPubKey);
@@ -61,9 +59,9 @@ export async function getActiveLimitPositions(
       // Внимание: если у монеты HELL 9 знаков после запятой, замените 1_000_000 на 1_000_000_000
       parsedPositions.push({
         positionAddress: pos.publicKey.toBase58(),
-        totalTokens: Number(totalX) / 1_000_000, 
+        totalTokens: Number(totalX) / DECEMIALS, 
         totalUsdc: Number(totalY) / 1_000_000,   
-        feeTokens: Number(feeX) / 1_000_000,
+        feeTokens: Number(feeX) / DECEMIALS,
         feeUsdc: Number(feeY) / 1_000_000,
         isBuyOrder,
         isSellOrder

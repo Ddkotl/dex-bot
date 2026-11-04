@@ -1,5 +1,6 @@
 export interface DexCoinConfig {
   SYMBOL: string;
+  DECEMIALS:number;
   TOKEN_MINT: string;
   POOL_ADDRESS: string;
 
@@ -27,13 +28,10 @@ export const QUOTE_TOKEN = {
   MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 } as const;
 
-// Флаг сам по себе не защищает от транзакций.
-// На этом этапе код исполнения сделок не подключаем.
-export const PAPER_TRADING = true;
-
 export const COINS_CONFIG: DexCoinConfig[] = [
   {
     SYMBOL: "HELL", // отображаемый тикер; идентичность задаётся mint
+    DECEMIALS: 1_000_000,
     TOKEN_MINT: "A75Xx6SeftAmWduv9KGwb2GCjXUAhxozcCUCys9jpump",
     POOL_ADDRESS: "2T8psneofbZpmjxp6aY9aa9wh895msL48P15Jz64HB3e",
 
