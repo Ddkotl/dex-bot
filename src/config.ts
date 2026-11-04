@@ -35,7 +35,7 @@ export const COINS_CONFIG: DexCoinConfig[] = [
     TOKEN_MINT: "A75Xx6SeftAmWduv9KGwb2GCjXUAhxozcCUCys9jpump",
     POOL_ADDRESS: "2T8psneofbZpmjxp6aY9aa9wh895msL48P15Jz64HB3e",
 
-    USDC_QUANTITY: 5,
+    USDC_QUANTITY: 2,
     STOP_LOSS_PCT: 15,
     BUY_RANGE: 0.1,
     SELL_RANGE: 0.75,

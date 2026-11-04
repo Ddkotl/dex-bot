@@ -1,5 +1,5 @@
-import type { DexCoinConfig } from "./config";
-import { getKlines } from "./get_info/get_clines";
+import type { DexCoinConfig } from "../config";
+import { getKlines } from "../get_info/get_clines";
 
 export interface MarketRegime {
   candleCount: number;
@@ -29,19 +29,15 @@ export async function analyzeMarket(
     config.CANDLES_INTERVAL,
     config.ANALIZE_INTERVAL_CANDLES,
   );
- if (candles.length < 2) {
-  throw new Error(
-    `[${config.SYMBOL}] Not enough candles for analysis`,
-  );
-}
+  if (candles.length < 2) {
+    throw new Error(`[${config.SYMBOL}] Not enough candles for analysis`);
+  }
 
-const lastCandle = candles[candles.length - 1];
+  const lastCandle = candles[candles.length - 1];
 
-if (!lastCandle) {
-  throw new Error(
-    `[${config.SYMBOL}] Last candle is missing`,
-  );
-}
+  if (!lastCandle) {
+    throw new Error(`[${config.SYMBOL}] Last candle is missing`);
+  }
   const minPrice = Math.min(...candles.map((c) => c.low));
   const maxPrice = Math.max(...candles.map((c) => c.high));
   const currentPrice = lastCandle.close;
@@ -75,10 +71,8 @@ if (!lastCandle) {
 
   const driftPct = (Math.abs(currentPrice - anchor) / anchor) * 100;
 
-
   const isSideways =
-    rangePct >= config.MIN_RANGE_PCT &&
-    rangePct <= config.MAX_RANGE_PCT ;
+    rangePct >= config.MIN_RANGE_PCT && rangePct <= config.MAX_RANGE_PCT;
 
   return {
     candleCount: candles.length,

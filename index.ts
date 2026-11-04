@@ -1,5 +1,5 @@
 import { COINS_CONFIG } from "./src/config";
-import { tradeLoop } from "./src/strategy";
+import { tradeLoop } from "./src/strategy/trade_loop";
 import { sleep } from "./src/utits/sleep";
 
 async function startMultiBot() {
