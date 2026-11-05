@@ -7,7 +7,9 @@
     "bot": "tsx index.ts",
     "rent:log": "tsx scripts/rent-log.ts",
     "rent:cleanup": "tsx scripts/rent-cleanup.ts",
-     "pnl": "tsx scripts/pnl-report.ts > pnl-report.txt 2>&1"
+    "swap:usdc-sol": "tsx scripts/swap-usdc-sol.ts",
+    "swap:sol-usdc": "tsx scripts/swap-sol-usdc.ts",
+    "pnl": "tsx scripts/pnl-report.ts > pnl-report.txt 2>&1"
   },
   "repository": {
     "type": "git",

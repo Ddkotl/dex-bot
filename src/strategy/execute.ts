@@ -7,8 +7,6 @@ import type { Action } from "./decide";
 import { loadWalletKeypair } from "../utits/keypair";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
 
-/** USDC на Solana — 6 decimals (минт EPjFW…TDt1v) */
-const USDC_MULTIPLIER = 1_000_000;
 
 export async function executeAction(
   action: Action,
@@ -21,11 +19,12 @@ export async function executeAction(
   const user = loadWalletKeypair();
 
   if (action.type === "OPEN_BUY") {
-    // BUY платим USDC → raw = usdc * 10^6
-    const amountRaw = new BN(Math.floor(action.usdc * USDC_MULTIPLIER));
+  const amountRaw = new BN(
+  Math.floor(action.quoteAmount * config.QUOTE_DECIMALS_MULTIPLIER),
+);
 
     console.log(
-      `[${config.SYMBOL}] 🟢 OPEN_BUY  price=${action.price.toFixed(8)}  usdc=${action.usdc}  raw=${amountRaw.toString()}`,
+      `[${config.SYMBOL}] 🟢 OPEN_BUY  price=${action.price.toFixed(8)}  usdc=${action.quoteAmount }  raw=${amountRaw.toString()}`,
     );
 
     await openLimitPosition({

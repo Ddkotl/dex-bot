@@ -34,14 +34,14 @@ export async function tradeLoop(config: DexCoinConfig) {
         continue;
       }
 
-      const usdc = balance.usdc ?? 0;
+      const quote = balance.sol + balance.wsol; // нативный + уже обёрнутый
       const token = balance.token ?? 0;
 
-      // ── 2. Чистое решение (без сети) ────────────────
       const action = decide({
         config,
         market,
-        usdcBalance: usdc,
+        quoteBalance: quote, // ← семантически теперь SOL, но поле в decide
+        //    можно переименовать в quoteBalance позже
         tokenBalance: token,
         positions,
       });
@@ -49,14 +49,16 @@ export async function tradeLoop(config: DexCoinConfig) {
       console.log(
         `[${SYMBOL}] price=${market.currentPrice.toFixed(8)} ` +
           `sideways=${market.isSideways} range=${market.rangePct.toFixed(1)}% ` +
-          `pos=${positions.length} usdc=${usdc.toFixed(2)} token=${token.toFixed(4)} ` +
+          `pos=${positions.length} ` +
+          `sol=${balance.sol.toFixed(4)} wsol=${balance.wsol.toFixed(4)} ` +
+          `token=${token.toFixed(4)} ` +
           `→ ${action.type}${action.type === "NOOP" ? ` (${action.reason})` : ""}`,
       );
 
-      // ── 3. Исполнение (с ожиданием confirm) ─────────
-      if (action.type !== "NOOP") {
-        await executeAction(action, config, market);
-      }
+      // // ── 3. Исполнение (с ожиданием confirm) ─────────
+      // if (action.type !== "NOOP") {
+      //   await executeAction(action, config, market);
+      // }
     } catch (err) {
       console.error(
         `💥 [${SYMBOL}] tick error:`,
