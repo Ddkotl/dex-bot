@@ -1,3 +1,4 @@
+
 import { PublicKey } from "@solana/web3.js";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
 
@@ -5,27 +6,21 @@ const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
 );
 
+const TOKEN_2022_PROGRAM_ID = new PublicKey(
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+);
+
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 export interface TokenBalances {
-  /** Нативный SOL в UI-единицах (lamports / 1e9) — газ, rent */
   sol: number;
-  /** Wrapped SOL с токен-аккаунта (обычно 0, если не обёрнут) */
   wsol: number;
-  /** USDC (для USDC-пулов на будущее) */
   usdc: number;
-  /** Баланс торгуемого токена */
   token: number;
-  /** Сырые lamports для точных расчётов газа/rent */
   solLamports: number;
 }
 
-/**
- * Один параллельный запрос к RPC: все SPL-токены + нативный SOL.
- * Никаких лишних вызовов — getBalance и getParsedTokenAccountsByOwner
- * идут одновременно через Promise.all.
- */
 export async function getAssetBalances(
   walletAddress: string,
   tokenMintAddress: string,
@@ -33,12 +28,20 @@ export async function getAssetBalances(
   try {
     const walletPubKey = new PublicKey(walletAddress);
 
-    const [solLamports, tokenAccountsResponse] = await Promise.all([
-      // Нативный SOL — 1 лёгкий вызов
+    // Получаем SOL и аккаунты обеих программ токенов
+    const [
+      solLamports,
+      splAccounts,
+      token2022Accounts,
+    ] = await Promise.all([
       pub_wallet_connection.getBalance(walletPubKey),
-      // Все SPL-токены кошелька — 1 вызов
+
       pub_wallet_connection.getParsedTokenAccountsByOwner(walletPubKey, {
         programId: TOKEN_PROGRAM_ID,
+      }),
+
+      pub_wallet_connection.getParsedTokenAccountsByOwner(walletPubKey, {
+        programId: TOKEN_2022_PROGRAM_ID,
       }),
     ]);
 
@@ -48,21 +51,52 @@ export async function getAssetBalances(
     let tokenBalance = 0;
     let wsolBalance = 0;
 
-    if (tokenAccountsResponse?.value) {
-      for (const accountInfo of tokenAccountsResponse.value) {
-        const parsedInfo = accountInfo.account.data.parsed.info;
-        const mint = parsedInfo.mint;
-        const uiAmount = Number(parsedInfo.tokenAmount.uiAmount || 0);
+    // Объединяем аккаунты обеих программ
+    const allAccounts = [
+      ...splAccounts.value,
+      ...token2022Accounts.value,
+    ];
 
-        if (mint === USDC_MINT) {
-          usdcBalance = uiAmount;
-        } else if (mint === tokenMintAddress) {
-          tokenBalance = uiAmount;
-        } else if (mint === WSOL_MINT) {
-          wsolBalance = uiAmount;
-        }
+    let tokenAccountCount = 0;
+
+    for (const account of allAccounts) {
+      const info = account.account.data.parsed.info;
+
+      const mint = info.mint;
+      const tokenAmount = info.tokenAmount;
+
+      // Берём точное значение из raw amount
+      const rawAmount = Number(tokenAmount.amount);
+      const decimals = tokenAmount.decimals;
+
+      if (!Number.isFinite(rawAmount)) continue;
+
+      const uiAmount = rawAmount / Math.pow(10, decimals);
+
+      if (mint === tokenMintAddress) {
+        tokenBalance += uiAmount;
+        tokenAccountCount++;
+
+        console.log(
+          `[BALANCE] Найден аккаунт токена: ${account.pubkey.toBase58()} | ` +
+          `balance=${uiAmount} | decimals=${decimals}`,
+        );
+      } else if (mint === WSOL_MINT) {
+        wsolBalance += uiAmount;
+      } else if (mint === USDC_MINT) {
+        usdcBalance += uiAmount;
       }
     }
+
+    console.log(
+      `[BALANCE] SPL accounts: ${splAccounts.value.length} | ` +
+      `Token-2022 accounts: ${token2022Accounts.value.length}`,
+    );
+
+    console.log(
+      `[BALANCE] HELL mint: ${tokenMintAddress} | ` +
+      `accounts: ${tokenAccountCount} | balance: ${tokenBalance}`,
+    );
 
     return {
       sol,
@@ -76,6 +110,7 @@ export async function getAssetBalances(
       "Критическая ошибка при запросе балансов с RPC:",
       error,
     );
+
     throw error;
   }
 }
