@@ -108,7 +108,7 @@ export const COINS_CONFIG: DexCoinConfig[] = [
     STOP_LOSS_PCT: 20,
 
     BUY_RANGE: 0.1,
-    SELL_RANGE: 0.75,
+    SELL_RANGE: 0.6,
 
     MIN_NOTIONAL: 0.01,
 

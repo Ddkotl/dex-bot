@@ -2,7 +2,7 @@
 import DLMM from "@meteora-ag/dlmm";
 import { PublicKey } from "@solana/web3.js";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
-
+import { getStoredPositionSide } from "./position_state_store";
 export type PositionState =
   | "QUOTE_ONLY"
   | "TOKEN_ONLY"
@@ -101,17 +101,9 @@ export async function getActiveLimitPositions(
     const lastBinId =
       binIds.length > 0 ? Math.max(...binIds) : null;
 
-    let side: PositionSide = "UNKNOWN";
-
-    if (firstBinId !== null && lastBinId !== null) {
-      if (isBaseX) {
-        if (lastBinId < activeBinId) side = "BUY";
-        else if (firstBinId > activeBinId) side = "SELL";
-      } else {
-        if (firstBinId > activeBinId) side = "BUY";
-        else if (lastBinId < activeBinId) side = "SELL";
-      }
-    }
+   const side: PositionSide = getStoredPositionSide(
+  position.publicKey.toBase58(),
+);
 
     let state: PositionState;
 

@@ -4,6 +4,11 @@ import { openLimitPosition } from "../actions/openLimitPosition";
 import { closeLimitPosition } from "../actions/closeLimitPosition";
 
 import { getAssetBalances } from "../get_info/get_balance";
+import {
+  savePositionSide,
+  removePositionSide,
+} from "../get_info/position_state_store";
+
 import type { DexCoinConfig } from "../config";
 import type { Action } from "./decide";
 
@@ -36,7 +41,7 @@ export async function executeAction(
       `[${config.SYMBOL}] OPEN_BUY price=${price} quote=${quoteAmount} raw=${amountRaw.toString()}`,
     );
 
-    await openLimitPosition({
+    const result = await openLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
       user,
@@ -45,6 +50,8 @@ export async function executeAction(
       targetPrice: price,
       amountRaw,
     });
+
+    savePositionSide(result.positionAddress, "BUY");
   };
 
   const openSell = async (price: number, tokens: number) => {
@@ -55,7 +62,7 @@ export async function executeAction(
       `[${config.SYMBOL}] OPEN_SELL price=${price} tokens=${tokens} raw=${amountRaw.toString()}`,
     );
 
-    await openLimitPosition({
+    const result = await openLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
       user,
@@ -64,6 +71,8 @@ export async function executeAction(
       targetPrice: price,
       amountRaw,
     });
+
+    savePositionSide(result.positionAddress, "SELL");
   };
 
   if (action.type === "OPEN_BUY") {
@@ -88,10 +97,13 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    // Только после подтверждённого закрытия читаем реальные балансы.
+    // Удаляем старую запись только после подтверждённого закрытия.
+    removePositionSide(action.positionAddress);
+
     const balance = await getAssetBalances(
       user.publicKey.toBase58(),
       config.TOKEN_MINT,
+      config.SYMBOL,
     );
 
     const quoteBalance = balance.sol + balance.wsol;
@@ -124,9 +136,12 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
+    removePositionSide(action.positionAddress);
+
     const balance = await getAssetBalances(
       user.publicKey.toBase58(),
       config.TOKEN_MINT,
+      config.SYMBOL,
     );
 
     const tokens = balance.token;
