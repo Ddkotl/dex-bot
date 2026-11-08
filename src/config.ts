@@ -1,4 +1,3 @@
-
 export interface DexCoinConfig {
   SYMBOL: string;
 
@@ -28,15 +27,7 @@ export interface DexCoinConfig {
   ANALIZE_INTERVAL_CANDLES: number;
 
   CANDLES_INTERVAL:
-    | "5m"
-    | "10m"
-    | "15m"
-    | "30m"
-    | "1h"
-    | "2h"
-    | "4h"
-    | "12h"
-    | "24h";
+    "5m" | "10m" | "15m" | "30m" | "1h" | "2h" | "4h" | "12h" | "24h";
 
   LOOCAL_LOOKBACK: number;
 
@@ -94,13 +85,11 @@ export const COINS_CONFIG: DexCoinConfig[] = [
   {
     SYMBOL: "BAGSPAY",
 
-    TOKEN_DECIMALS: 6,
+    TOKEN_DECIMALS: 9,
 
-    TOKEN_MINT:
-      "H8WTvo3ZXSYHJAcYqzCforbG8coR1FDAX2kHFfqHBAGS",
+    TOKEN_MINT: "H8WTvo3ZXSYHJAcYqzCforbG8coR1FDAX2kHFfqHBAGS",
 
-    POOL_ADDRESS:
-      "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA",
+    POOL_ADDRESS: "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA",
 
     QUOTE_QUANTITY: 0.02,
     QUOTE_DECIMALS_MULTIPLIER: 1_000_000_000,
