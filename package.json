@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "bot": "tsx index.ts",
-       "test": "tsx test.ts"
+    "rent:log": "tsx scripts/rent-log.ts",
+    "rent:cleanup": "tsx scripts/rent-cleanup.ts",
+    "swap:usdc-sol": "tsx scripts/swap-usdc-sol.ts",
+    "swap:sol-usdc": "tsx scripts/swap-sol-usdc.ts",
+    "pnl": "tsx scripts/pnl-report.ts > pnl-report.txt 2>&1"
   },
   "repository": {
     "type": "git",
@@ -20,12 +24,16 @@
   },
   "homepage": "https://github.com/Ddkotl/dex-bot#readme",
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@meteora-ag/dlmm": "^1.9.14",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
+    "bn.js": "^5.2.5",
     "bs58": "^6.0.0",
     "dotenv": "^18.0.9"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/node": "^26.6.5",
     "prettier": "^3.9.10",
     "ts-node": "^10.9.2",

@@ -1,60 +1,118 @@
-
 export interface DexCoinConfig {
   SYMBOL: string;
+
+  TOKEN_DECIMALS: number;
   TOKEN_MINT: string;
   POOL_ADDRESS: string;
 
-  // Только параметры будущей бумажной торговли
-  USDC_QUANTITY: number;
+  /**
+   * Объём одной buy-лимитки в единицах quote-токена.
+   * Для SOL-пары — в SOL.
+   */
+  QUOTE_QUANTITY: number;
+
+  /** 10 ** quote decimals */
+  QUOTE_DECIMALS_MULTIPLIER: number;
+
   STOP_LOSS_PCT: number;
   BUY_RANGE: number;
   SELL_RANGE: number;
 
   MIN_NOTIONAL: number;
+
   TRADE_INTERVAL_MS: number;
   INTERVAL_AFTER_STOPLOSS_MS: number;
   ORDER_TIMEOUT_MS: number;
 
   ANALIZE_INTERVAL_CANDLES: number;
-  CANDLES_INTERVAL: "1m" | "5m" | "10m" | "15m" | "1h";
+
+  CANDLES_INTERVAL:
+    "5m" | "10m" | "15m" | "30m" | "1h" | "2h" | "4h" | "12h" | "24h";
+
   LOOCAL_LOOKBACK: number;
 
   MIN_RANGE_PCT: number;
   MAX_RANGE_PCT: number;
 }
 
+/**
+ * Quote-токен для DLMM.
+ * WSOL — SPL-токен.
+ */
 export const QUOTE_TOKEN = {
-  SYMBOL: "USDC",
-  MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  SYMBOL: "SOL",
+  MINT: "So11111111111111111111111111111111111111112",
+  DECIMALS: 9,
+  MULTIPLIER: 1_000_000_000,
 } as const;
 
-// Флаг сам по себе не защищает от транзакций.
-// На этом этапе код исполнения сделок не подключаем.
-export const PAPER_TRADING = true;
-
 export const COINS_CONFIG: DexCoinConfig[] = [
+  // {
+  //   SYMBOL: "HELL",
+
+  //   TOKEN_DECIMALS: 6,
+
+  //   TOKEN_MINT:
+  //     "A75Xx6SeftAmWduv9KGwb2GCjXUAhxozcCUCys9jpump",
+
+  //   POOL_ADDRESS:
+  //     "2T8psneofbZpmjxp6aY9aa9wh895msL48P15Jz64HB3e",
+
+  //   QUOTE_QUANTITY: 0.1,
+  //   QUOTE_DECIMALS_MULTIPLIER: 1_000_000_000,
+
+  //   STOP_LOSS_PCT: 15,
+
+  //   BUY_RANGE: 0.1,
+  //   SELL_RANGE: 0.75,
+
+  //   MIN_NOTIONAL: 0.01,
+
+  //   TRADE_INTERVAL_MS: 90_000,
+  //   INTERVAL_AFTER_STOPLOSS_MS: 300_000,
+  //   ORDER_TIMEOUT_MS: 60_000,
+
+  //   ANALIZE_INTERVAL_CANDLES: 10,
+
+  //   // 10 свечей по 30 минут = 5 часов.
+  //   CANDLES_INTERVAL: "30m",
+
+  //   LOOCAL_LOOKBACK: 5,
+
+  //   MIN_RANGE_PCT: 2,
+  //   MAX_RANGE_PCT: 100,
+  // },
   {
-    SYMBOL: "HELL", // отображаемый тикер; идентичность задаётся mint
-    TOKEN_MINT:
-      "A75Xx6SeftAmWduv9KGwb2GCjXUAhxozcCUCys9jpump",
-    POOL_ADDRESS:
-      "EwsYHiuznyNqH5f65YpfsoQBLq2KyETuvhm5un7wsfDG",
+    SYMBOL: "BAGSPAY",
 
-    USDC_QUANTITY: 5,
-    STOP_LOSS_PCT: 10,
-    BUY_RANGE: 0.25,
-    SELL_RANGE: 0.75,
+    TOKEN_DECIMALS: 9,
 
-    MIN_NOTIONAL: 1.5,
-    TRADE_INTERVAL_MS: 60_000,
+    TOKEN_MINT: "H8WTvo3ZXSYHJAcYqzCforbG8coR1FDAX2kHFfqHBAGS",
+
+    POOL_ADDRESS: "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA",
+
+    QUOTE_QUANTITY: 0.02,
+    QUOTE_DECIMALS_MULTIPLIER: 1_000_000_000,
+
+    STOP_LOSS_PCT: 20,
+
+    BUY_RANGE: 0.1,
+    SELL_RANGE: 0.6,
+
+    MIN_NOTIONAL: 0.01,
+
+    TRADE_INTERVAL_MS: 30_000,
     INTERVAL_AFTER_STOPLOSS_MS: 300_000,
     ORDER_TIMEOUT_MS: 60_000,
 
-    ANALIZE_INTERVAL_CANDLES: 120,
-    CANDLES_INTERVAL: "15m",
-    LOOCAL_LOOKBACK: 3,
+    ANALIZE_INTERVAL_CANDLES: 50,
 
-    MIN_RANGE_PCT: 1,
-    MAX_RANGE_PCT: 20,
+    // 10 свечей по 30 минут = 5 часов.
+    CANDLES_INTERVAL: "30m",
+
+    LOOCAL_LOOKBACK: 50,
+
+    MIN_RANGE_PCT: 2,
+    MAX_RANGE_PCT: 100,
   },
 ];
