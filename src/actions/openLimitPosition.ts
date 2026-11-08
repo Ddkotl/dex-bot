@@ -1,26 +1,37 @@
 import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import { Connection, Keypair, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
 import BN from "bn.js";
 
 export interface OpenLimitPositionParams {
   connection: Connection;
-  poolAddress: string;          // config.POOL_ADDRESS
-  user: Keypair;                // кошелёк-подписант
-  tokenMint: string;            // config.TOKEN_MINT (base mint)
+  poolAddress: string;
+  user: Keypair;
+  tokenMint: string;
   side: "buy" | "sell";
-  targetPrice: number;          // человеческая цена (например, 0.00298)
-  amountRaw: BN;                // сумма в raw units (lamports для USDC, raw для токена)
-  binRangeWidth?: number;       // сколько бинов шириной (по умолчанию 1 — чистый лимит)
+  targetPrice: number;
+  amountRaw: BN;
+  binRangeWidth?: number;
 }
 
 /**
- * Открывает одностороннюю лимитную позицию в пуле Meteora DLMM.
- *
- * BUY  — размещает USDC (quote) в бинах НИЖЕ активного → сработает при падении цены.
- * SELL — размещает токен (base) в бинах ВЫШЕ активного → сработает при росте цены.
- *
- * Возвращает подпись транзакции.
+ * Конвертирует bin ID в индекс bin array (корзины).
+ * Повторяет логику binIdToBinArrayIndex из SDK Meteora:
+ *  - для binId >= 0: floor(binId / 70)
+ *  - для binId < 0:  floor((binId - 69) / 70)
+ *    (bin -1..-70 → array -1; bin -71..-140 → array -2 и т.д.)
  */
+function binIdToBinArrayIndex(binId: number): number {
+  if (binId >= 0) {
+    return Math.floor(binId / 70);
+  }
+  return Math.floor((binId - 69) / 70);
+}
+
 export async function openLimitPosition(
   params: OpenLimitPositionParams,
 ): Promise<string> {
@@ -35,7 +46,6 @@ export async function openLimitPosition(
     binRangeWidth = 1,
   } = params;
 
-  // 1. Инициализируем пул
   const pool = await DLMM.create(connection, new PublicKey(poolAddress), {
     cluster: "mainnet-beta",
   });
@@ -43,16 +53,17 @@ export async function openLimitPosition(
   const activeBin = await pool.getActiveBin();
   const binStep = pool.lbPair.binStep;
 
-  // 2. Преобразуем целевую цену в bin ID.
-  //    getBinIdFromPrice(price, binStep, min) — min=true округляет вниз.
-  //    Для BUY округляем вниз (более низкая цена), для SELL — вверх.
   const targetBinId = DLMM.getBinIdFromPrice(
     targetPrice,
     binStep,
-    side === "buy", // true → floor для BUY, false → ceil для SELL
+    side === "buy",
   );
 
-  // 3. Проверяем, что бин с правильной стороны от активного
+  const half = Math.max(0, Math.floor((binRangeWidth - 1) / 2));
+  const minBinId = targetBinId - half;
+  const maxBinId = targetBinId + half;
+
+  // ── 1. Проверка стороны ────────────────────────────────────
   if (side === "buy" && targetBinId >= activeBin.binId) {
     throw new Error(
       `BUY bin ${targetBinId} >= active bin ${activeBin.binId}; цена ${targetPrice} не ниже текущей`,
@@ -64,25 +75,53 @@ export async function openLimitPosition(
     );
   }
 
-  // 4. Диапазон бинов вокруг целевого (по умолчанию 1 бин — чистый лимит)
-  const half = Math.max(0, Math.floor((binRangeWidth - 1) / 2));
-  const minBinId = targetBinId - half;
-  const maxBinId = targetBinId + half;
+  // ── 2. Проверка существования Bin Arrays ──────────────────
+  console.log(
+    `   🔍 Проверка корзин для диапазона [${minBinId}..${maxBinId}]...`,
+  );
 
-  // 5. Определяем, какой токен в пуле является X (base), а какой Y (quote)
+  const existingBinArrays = await pool.getBinArrays();
+  // ✅ Правильное поле: ba.account.index (BN), а не binArrayIndex
+  const existingIndexes = new Set<number>(
+    existingBinArrays.map((ba) => ba.account.index.toNumber()),
+  );
+
+  const requiredIndexes = new Set<number>();
+  for (let binId = minBinId; binId <= maxBinId; binId++) {
+    requiredIndexes.add(binIdToBinArrayIndex(binId));
+  }
+
+  const missingIndexes: number[] = [];
+  for (const idx of requiredIndexes) {
+    if (!existingIndexes.has(idx)) {
+      missingIndexes.push(idx);
+    }
+  }
+
+  if (missingIndexes.length > 0) {
+    const rentCost = missingIndexes.length * 0.075;
+    throw new Error(
+      `❌ Отмена: для диапазона [${minBinId}..${maxBinId}] ` +
+        `не хватает ${missingIndexes.length} корзин ` +
+        `(индексы: ${missingIndexes.join(", ")}). ` +
+        `Создание новых корзин стоит ~${rentCost.toFixed(2)} SOL безвозвратно. ` +
+        `Сделка пропущена для экономии средств.`,
+    );
+  }
+
+  console.log(
+    `   ✅ Все необходимые корзины (${requiredIndexes.size}) уже существуют. Рент не потребуется.`,
+  );
+
+  // ── 3. Определяем стороны X и Y ────────────────────────────
   const tokenXMint = pool.lbPair.tokenXMint.toBase58();
-  // const tokenYMint = pool.lbPair.tokenYMint.toBase58(); // обычно USDC
   const isBaseX = tokenXMint === tokenMint;
 
-  // 6. Собираем параметры односторонней позиции
-  //    BUY:  депонируем quote (USDC) → если USDC это Y, то singleSidedX = false
-  //    SELL: депонируем base (токен) → если токен это X, то singleSidedX = true
   let totalXAmount: BN;
   let totalYAmount: BN;
   let singleSidedX: boolean;
 
   if (side === "sell") {
-    // Продаём base-токен → кладём только X (если base = X) или только Y (если base = Y)
     if (isBaseX) {
       totalXAmount = amountRaw;
       totalYAmount = new BN(0);
@@ -93,21 +132,18 @@ export async function openLimitPosition(
       singleSidedX = false;
     }
   } else {
-    // Покупаем base за quote → кладём только quote (USDC)
     if (isBaseX) {
-      // base = X, значит quote = Y (USDC)
       totalXAmount = new BN(0);
       totalYAmount = amountRaw;
       singleSidedX = false;
     } else {
-      // base = Y, значит quote = X (USDC)
       totalXAmount = amountRaw;
       totalYAmount = new BN(0);
       singleSidedX = true;
     }
   }
 
-  // 7. Создаём keypair под новую позицию (SDK инициализирует её в той же транзакции)
+  // ── 4. Открываем позицию ───────────────────────────────────
   const positionKeypair = Keypair.generate();
 
   const tx = await pool.initializePositionAndAddLiquidityByStrategy({
@@ -118,7 +154,7 @@ export async function openLimitPosition(
     strategy: {
       minBinId,
       maxBinId,
-      strategyType: StrategyType.Spot, // для лимита достаточно Spot
+      strategyType: StrategyType.Spot,
       singleSidedX,
     },
   });
@@ -130,7 +166,7 @@ export async function openLimitPosition(
 
   console.log(
     `   ✅ limit ${side.toUpperCase()} bin=[${minBinId}..${maxBinId}] ` +
-    `price≈${targetPrice.toFixed(8)}  sig=${signature}`,
+      `price≈${targetPrice.toFixed(8)}  sig=${signature}`,
   );
 
   return signature;

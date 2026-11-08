@@ -2,9 +2,7 @@ import "dotenv/config";
 import { COINS_CONFIG } from "./src/config";
 import { tradeLoop } from "./src/strategy/trade_loop";
 import { sleep } from "./src/utits/sleep";
-import { pub_wallet_connection } from "./src/client/pub_wallet_connect";
 import { loadWalletKeypair } from "./src/utits/keypair";
-import { startAutoConvert } from "./src/treasury/autoConvert";
 
 async function startMultiBot() {
   const user = loadWalletKeypair();
@@ -18,13 +16,16 @@ async function startMultiBot() {
   });
 
   // 2. Казначейство: авто-конвертация SOL→USDT раз в час
-  const treasuryPromise = startAutoConvert(pub_wallet_connection, user);
+  // const treasuryPromise = startAutoConvert(pub_wallet_connection, user);
 
   // 3. Ждём всё вместе (на практике — до Ctrl+C)
-  await Promise.all([...tradingPromises, treasuryPromise]);
+  await Promise.all([...tradingPromises]);
 }
 
 startMultiBot().catch((err) => {
-  console.error("❌ Фатальная ошибка:", err instanceof Error ? err.message : err);
+  console.error(
+    "❌ Фатальная ошибка:",
+    err instanceof Error ? err.message : err,
+  );
   process.exit(1);
 });

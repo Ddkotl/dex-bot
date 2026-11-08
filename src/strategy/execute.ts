@@ -7,7 +7,6 @@ import type { Action } from "./decide";
 import { loadWalletKeypair } from "../utits/keypair";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
 
-
 export async function executeAction(
   action: Action,
   config: DexCoinConfig,
@@ -19,12 +18,12 @@ export async function executeAction(
   const user = loadWalletKeypair();
 
   if (action.type === "OPEN_BUY") {
-  const amountRaw = new BN(
-  Math.floor(action.quoteAmount * config.QUOTE_DECIMALS_MULTIPLIER),
-);
+    const amountRaw = new BN(
+      Math.floor(action.quoteAmount * config.QUOTE_DECIMALS_MULTIPLIER),
+    );
 
     console.log(
-      `[${config.SYMBOL}] 🟢 OPEN_BUY  price=${action.price.toFixed(8)}  usdc=${action.quoteAmount }  raw=${amountRaw.toString()}`,
+      `[${config.SYMBOL}] 🟢 OPEN_BUY  price=${action.price.toFixed(8)}  usdc=${action.quoteAmount}  raw=${amountRaw.toString()}`,
     );
 
     await openLimitPosition({
@@ -40,7 +39,7 @@ export async function executeAction(
 
   if (action.type === "OPEN_SELL") {
     // SELL отдаём base-токен → raw = tokens * DECEMIALS (DECEMIALS = 10^decimals)
-    const amountRaw = new BN(Math.floor(action.tokens * config.DECEMIALS));
+    const amountRaw = new BN(Math.floor(action.tokens * config.TOKEN_DECIMALS));
 
     console.log(
       `[${config.SYMBOL}] 🔴 OPEN_SELL price=${action.price.toFixed(8)}  tokens=${action.tokens}  raw=${amountRaw.toString()}`,
