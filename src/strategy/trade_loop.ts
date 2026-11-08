@@ -2,9 +2,12 @@ import "dotenv/config";
 
 import { analyzeMarket } from "../actions/analize_market";
 import { getAssetBalances } from "../get_info/get_balance";
-import type { DexCoinConfig } from "../config";
 import { getActiveLimitPositions } from "../get_info/get_positions";
+
+import type { DexCoinConfig } from "../config";
+
 import { sleep } from "../utits/sleep";
+
 import {
   logBotStart,
   logNoMarket,
@@ -13,50 +16,57 @@ import {
 } from "../utits/trade_logger";
 
 import { decide } from "./decide";
+import { executeAction } from "./execute";
 
 const WALLET_PUB_ADRESS = process.env.WALLET_PUB_ADRESS || "";
+const ENABLE_TRADING = process.env.ENABLE_TRADING === "true";
 
 export async function tradeLoop(config: DexCoinConfig) {
   const { SYMBOL, TOKEN_MINT, POOL_ADDRESS, TRADE_INTERVAL_MS } = config;
 
+  if (!WALLET_PUB_ADRESS) {
+    throw new Error("WALLET_PUB_ADRESS не задан в .env");
+  }
+
   logBotStart(config);
+
+  console.log(
+    `[${SYMBOL}] Trading execution: ${ENABLE_TRADING ? "ENABLED" : "DISABLED"}`,
+  );
 
   while (true) {
     try {
-      // 1. Получаем актуальные данные
       const [market, balance, positions] = await Promise.all([
         analyzeMarket(config),
 
-        getAssetBalances(WALLET_PUB_ADRESS, TOKEN_MINT),
+        getAssetBalances(WALLET_PUB_ADRESS, TOKEN_MINT, SYMBOL),
 
         getActiveLimitPositions(
           POOL_ADDRESS,
           WALLET_PUB_ADRESS,
+          TOKEN_MINT,
           config.TOKEN_DECIMALS,
+          9,
         ),
       ]);
 
-      // 2. Проверяем рынок
       if (!market) {
         logNoMarket(SYMBOL);
         await sleep(TRADE_INTERVAL_MS);
         continue;
       }
 
-      // 3. Балансы
-      const quote = balance.sol + balance.wsol;
-      const token = balance.token ?? 0;
+      const quoteBalance = balance.sol + balance.wsol;
+      const tokenBalance = balance.token ?? 0;
 
-      // 4. Принимаем торговое решение
       const action = decide({
         config,
         market,
-        quoteBalance: quote,
-        tokenBalance: token,
+        quoteBalance,
+        tokenBalance,
         positions,
       });
 
-      // 5. Выводим информацию о тике
       logTradeTick({
         symbol: SYMBOL,
         market,
@@ -65,15 +75,19 @@ export async function tradeLoop(config: DexCoinConfig) {
         action,
       });
 
-      // 6. Исполнение сделок пока отключено
-      // if (action.type !== "NOOP") {
-      //   await executeAction(action, config, market);
-      // }
+      if (action.type !== "NOOP") {
+        if (ENABLE_TRADING) {
+          await executeAction(action, config);
+        } else {
+          console.log(`[${SYMBOL}] DRY RUN: ${JSON.stringify(action)}`);
+        }
+      }
     } catch (error) {
+      // Ошибка чтения позиций или баланса не должна приводить
+      // к открытию новой позиции на следующем шаге как будто позиций нет.
       logTradeError(SYMBOL, error);
     }
 
-    // 7. Ждём следующий тик
     await sleep(TRADE_INTERVAL_MS);
   }
 }

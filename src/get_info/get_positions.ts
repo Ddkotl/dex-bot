@@ -3,102 +3,145 @@ import DLMM from "@meteora-ag/dlmm";
 import { PublicKey } from "@solana/web3.js";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
 
+export type PositionState =
+  | "QUOTE_ONLY"
+  | "TOKEN_ONLY"
+  | "MIXED"
+  | "EMPTY";
+
+export type PositionSide = "BUY" | "SELL" | "UNKNOWN";
+
 export interface Dlmmpresentation {
   positionAddress: string;
-
   totalTokens: number;
   totalQuote: number;
-
   feeTokens: number;
   feeQuote: number;
-
-  isBuyOrder: boolean;
-  isSellOrder: boolean;
-
+  state: PositionState;
+  side: PositionSide;
   binCount: number;
   firstBinId: number | null;
   lastBinId: number | null;
+  activeBinId: number;
+}
+
+function rawToUi(value: unknown, decimals: number): number {
+  return Number(BigInt(String(value ?? "0"))) / 10 ** decimals;
 }
 
 export async function getActiveLimitPositions(
   poolAddress: string,
   walletAddress: string,
-  TOKEN_DECIMALS_MULTIPLIER: number,
+  tokenMint: string,
+  tokenDecimals: number,
+  quoteDecimals = 9,
 ): Promise<Dlmmpresentation[]> {
-  try {
-    const poolPubKey = new PublicKey(poolAddress.trim());
-    const userPubKey = new PublicKey(walletAddress.trim());
+  const pool = await DLMM.create(
+    pub_wallet_connection,
+    new PublicKey(poolAddress.trim()),
+    { cluster: "mainnet-beta" },
+  );
 
-    const dlmmPool = await DLMM.create(
-      pub_wallet_connection,
-      poolPubKey,
+  const userPubKey = new PublicKey(walletAddress.trim());
+  const tokenPubKey = new PublicKey(tokenMint.trim());
+
+  const isBaseX = pool.lbPair.tokenXMint.equals(tokenPubKey);
+  const isBaseY = pool.lbPair.tokenYMint.equals(tokenPubKey);
+
+  if (!isBaseX && !isBaseY) {
+    throw new Error("TOKEN_MINT не найден в tokenXMint/tokenYMint пула");
+  }
+
+  const { userPositions, activeBin } =
+    await pool.getPositionsByUserAndLbPair(userPubKey);
+
+  const activeBinId = Number(activeBin.binId);
+  const result: Dlmmpresentation[] = [];
+
+  const tokenTolerance = 2 / 10 ** tokenDecimals;
+  const quoteTolerance = 2 / 10 ** quoteDecimals;
+
+  for (const position of userPositions) {
+    const data = position.positionData;
+
+    const totalX = rawToUi(
+      data.totalXAmount,
+      pool.tokenX.mint.decimals,
     );
 
-    const { userPositions } =
-      await dlmmPool.getPositionsByUserAndLbPair(userPubKey);
+    const totalY = rawToUi(
+      data.totalYAmount,
+      pool.tokenY.mint.decimals,
+    );
 
-    const activeBin = await dlmmPool.getActiveBin();
-    const currentBinId = activeBin.binId;
+    const feeX = rawToUi(
+      data.feeX,
+      pool.tokenX.mint.decimals,
+    );
 
-    const parsedPositions: Dlmmpresentation[] = [];
+    const feeY = rawToUi(
+      data.feeY,
+      pool.tokenY.mint.decimals,
+    );
 
-    for (const pos of userPositions) {
-      const positionData = pos.positionData;
+    const totalTokens = isBaseX ? totalX : totalY;
+    const totalQuote = isBaseX ? totalY : totalX;
+    const feeTokens = isBaseX ? feeX : feeY;
+    const feeQuote = isBaseX ? feeY : feeX;
 
-      const totalX = Number(positionData.totalXAmount);
-      const totalY = Number(positionData.totalYAmount);
+    const bins = data.positionBinData ?? [];
 
-      const feeX = Number(positionData.feeX);
-      const feeY = Number(positionData.feeY);
+    const binIds = bins
+      .map((bin) => Number(bin.binId))
+      .filter(Number.isFinite);
 
-      const bins = positionData.positionBinData || [];
+    const firstBinId =
+      binIds.length > 0 ? Math.min(...binIds) : null;
 
-      const binIds = bins
-        .map((bin) => bin.binId)
-        .filter((id): id is number => Number.isFinite(id));
+    const lastBinId =
+      binIds.length > 0 ? Math.max(...binIds) : null;
 
-      const firstBinId =
-        binIds.length > 0 ? Math.min(...binIds) : null;
+    let side: PositionSide = "UNKNOWN";
 
-      const lastBinId =
-        binIds.length > 0 ? Math.max(...binIds) : null;
-
-      // Направление по расположению диапазона относительно active bin.
-      const isBuyOrder =
-        firstBinId !== null && lastBinId !== null
-          ? lastBinId < currentBinId
-          : false;
-
-      const isSellOrder =
-        firstBinId !== null && lastBinId !== null
-          ? firstBinId > currentBinId
-          : false;
-
-      parsedPositions.push({
-        positionAddress: pos.publicKey.toBase58(),
-
-        totalTokens: totalX / TOKEN_DECIMALS_MULTIPLIER,
-        totalQuote: totalY / 1_000_000_000,
-
-        feeTokens: feeX / TOKEN_DECIMALS_MULTIPLIER,
-        feeQuote: feeY / 1_000_000_000,
-
-        isBuyOrder,
-        isSellOrder,
-
-        binCount: bins.length,
-        firstBinId,
-        lastBinId,
-      });
+    if (firstBinId !== null && lastBinId !== null) {
+      if (isBaseX) {
+        if (lastBinId < activeBinId) side = "BUY";
+        else if (firstBinId > activeBinId) side = "SELL";
+      } else {
+        if (firstBinId > activeBinId) side = "BUY";
+        else if (lastBinId < activeBinId) side = "SELL";
+      }
     }
 
-    return parsedPositions;
-  } catch (error) {
-    console.error(
-      "Ошибка при получении лимитных позиций с блокчейна:",
-      error,
-    );
+    let state: PositionState;
 
-    return [];
+    if (
+      totalTokens <= tokenTolerance &&
+      totalQuote <= quoteTolerance
+    ) {
+      state = "EMPTY";
+    } else if (totalTokens <= tokenTolerance) {
+      state = "QUOTE_ONLY";
+    } else if (totalQuote <= quoteTolerance) {
+      state = "TOKEN_ONLY";
+    } else {
+      state = "MIXED";
+    }
+
+    result.push({
+      positionAddress: position.publicKey.toBase58(),
+      totalTokens,
+      totalQuote,
+      feeTokens,
+      feeQuote,
+      state,
+      side,
+      binCount: bins.length,
+      firstBinId,
+      lastBinId,
+      activeBinId,
+    });
   }
+
+  return result;
 }

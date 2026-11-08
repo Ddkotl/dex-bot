@@ -10,8 +10,11 @@ const TOKEN_2022_PROGRAM_ID = new PublicKey(
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
 );
 
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const WSOL_MINT = "So11111111111111111111111111111111111111112";
+const USDC_MINT =
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+const WSOL_MINT =
+  "So11111111111111111111111111111111111111112";
 
 export interface TokenBalances {
   sol: number;
@@ -21,96 +24,95 @@ export interface TokenBalances {
   solLamports: number;
 }
 
+function rawToUi(rawAmount: string, decimals: number): number {
+  return Number(BigInt(rawAmount)) / 10 ** decimals;
+}
+
 export async function getAssetBalances(
   walletAddress: string,
   tokenMintAddress: string,
+  tokenSymbol = "TOKEN",
 ): Promise<TokenBalances> {
-  try {
-    const walletPubKey = new PublicKey(walletAddress);
+  const walletPubKey = new PublicKey(walletAddress);
+  const tokenMint = new PublicKey(tokenMintAddress);
 
-    // Получаем SOL и аккаунты обеих программ токенов
-    const [
-      solLamports,
-      splAccounts,
-      token2022Accounts,
-    ] = await Promise.all([
-      pub_wallet_connection.getBalance(walletPubKey),
+  const [
+    solLamports,
+    splAccounts,
+    token2022Accounts,
+  ] = await Promise.all([
+    pub_wallet_connection.getBalance(walletPubKey),
 
-      pub_wallet_connection.getParsedTokenAccountsByOwner(walletPubKey, {
-        programId: TOKEN_PROGRAM_ID,
-      }),
+    pub_wallet_connection.getParsedTokenAccountsByOwner(
+      walletPubKey,
+      { programId: TOKEN_PROGRAM_ID },
+    ),
 
-      pub_wallet_connection.getParsedTokenAccountsByOwner(walletPubKey, {
-        programId: TOKEN_2022_PROGRAM_ID,
-      }),
-    ]);
+    pub_wallet_connection.getParsedTokenAccountsByOwner(
+      walletPubKey,
+      { programId: TOKEN_2022_PROGRAM_ID },
+    ),
+  ]);
 
-    const sol = solLamports / 1e9;
+  const sol = solLamports / 1_000_000_000;
 
-    let usdcBalance = 0;
-    let tokenBalance = 0;
-    let wsolBalance = 0;
+  let usdcBalance = 0;
+  let tokenBalance = 0;
+  let wsolBalance = 0;
 
-    // Объединяем аккаунты обеих программ
-    const allAccounts = [
-      ...splAccounts.value,
-      ...token2022Accounts.value,
-    ];
+  const allAccounts = [
+    ...splAccounts.value,
+    ...token2022Accounts.value,
+  ];
 
-    let tokenAccountCount = 0;
+  let tokenAccountCount = 0;
 
-    for (const account of allAccounts) {
-      const info = account.account.data.parsed.info;
+  for (const account of allAccounts) {
+    const info = account.account.data.parsed.info;
 
-      const mint = info.mint;
-      const tokenAmount = info.tokenAmount;
+    const mint = new PublicKey(info.mint);
 
-      // Берём точное значение из raw amount
-      const rawAmount = Number(tokenAmount.amount);
-      const decimals = tokenAmount.decimals;
+    const amount = info.tokenAmount.amount as string;
+    const decimals = Number(info.tokenAmount.decimals);
 
-      if (!Number.isFinite(rawAmount)) continue;
-
-      const uiAmount = rawAmount / Math.pow(10, decimals);
-
-      if (mint === tokenMintAddress) {
-        tokenBalance += uiAmount;
-        tokenAccountCount++;
-
-        console.log(
-          `[BALANCE] Найден аккаунт токена: ${account.pubkey.toBase58()} | ` +
-          `balance=${uiAmount} | decimals=${decimals}`,
-        );
-      } else if (mint === WSOL_MINT) {
-        wsolBalance += uiAmount;
-      } else if (mint === USDC_MINT) {
-        usdcBalance += uiAmount;
-      }
+    if (!Number.isInteger(decimals) || decimals < 0) {
+      throw new Error(
+        `Некорректные decimals в аккаунте ${account.pubkey.toBase58()}`,
+      );
     }
 
-    console.log(
-      `[BALANCE] SPL accounts: ${splAccounts.value.length} | ` +
-      `Token-2022 accounts: ${token2022Accounts.value.length}`,
-    );
+    const uiAmount = rawToUi(amount, decimals);
 
-    console.log(
-      `[BALANCE] HELL mint: ${tokenMintAddress} | ` +
-      `accounts: ${tokenAccountCount} | balance: ${tokenBalance}`,
-    );
+    if (mint.equals(tokenMint)) {
+      tokenBalance += uiAmount;
+      tokenAccountCount++;
 
-    return {
-      sol,
-      wsol: wsolBalance,
-      usdc: usdcBalance,
-      token: tokenBalance,
-      solLamports,
-    };
-  } catch (error) {
-    console.error(
-      "Критическая ошибка при запросе балансов с RPC:",
-      error,
-    );
-
-    throw error;
+      console.log(
+        `[BALANCE] ${tokenSymbol}: ${account.pubkey.toBase58()} | ` +
+        `balance=${uiAmount} | decimals=${decimals}`,
+      );
+    } else if (mint.toBase58() === WSOL_MINT) {
+      wsolBalance += uiAmount;
+    } else if (mint.toBase58() === USDC_MINT) {
+      usdcBalance += uiAmount;
+    }
   }
+
+  console.log(
+    `[BALANCE] SPL accounts: ${splAccounts.value.length} | ` +
+    `Token-2022 accounts: ${token2022Accounts.value.length}`,
+  );
+
+  console.log(
+    `[BALANCE] ${tokenSymbol} mint: ${tokenMintAddress} | ` +
+    `accounts: ${tokenAccountCount} | balance: ${tokenBalance}`,
+  );
+
+  return {
+    sol,
+    wsol: wsolBalance,
+    usdc: usdcBalance,
+    token: tokenBalance,
+    solLamports,
+  };
 }

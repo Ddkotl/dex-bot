@@ -107,11 +107,7 @@ function printPositions(positions: Dlmmpresentation[]): void {
   printRow("Активных:", String(positions.length));
 
   positions.forEach((position, index) => {
-    const direction = position.isBuyOrder
-      ? color("BUY", COLORS.green)
-      : position.isSellOrder
-        ? color("SELL", COLORS.yellow)
-        : color("НЕ ОПРЕДЕЛЁН", COLORS.gray);
+   const direction = position.side;
 
     console.log("");
     console.log(`  ${color(`Ордер #${index + 1}`, COLORS.bold)} ${direction}`);
@@ -121,11 +117,11 @@ function printPositions(positions: Dlmmpresentation[]): void {
       `${position.positionAddress.slice(0, 8)}...${position.positionAddress.slice(-8)}`,
     );
 
-    printRow("Токены:", `${number(position.totalTokens, 8)} HELL`);
+    printRow("Токены:", `${number(position.totalTokens, 8)} `);
 
     printRow("Quote:", `${number(position.totalQuote, 8)} SOL`);
 
-    printRow("Комиссия HELL:", `${number(position.feeTokens, 8)}`);
+    printRow("Комиссия :", `${number(position.feeTokens, 8)}`);
 
     printRow("Комиссия SOL:", `${number(position.feeQuote, 8)}`);
 

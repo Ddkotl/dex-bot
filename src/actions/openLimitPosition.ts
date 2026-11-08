@@ -34,7 +34,11 @@ function binIdToBinArrayIndex(binId: number): number {
 
 export async function openLimitPosition(
   params: OpenLimitPositionParams,
-): Promise<string> {
+): Promise<{
+  signature: string;
+  positionAddress: string;
+  binId: number;
+}> {
   const {
     connection,
     poolAddress,
@@ -53,25 +57,70 @@ export async function openLimitPosition(
   const activeBin = await pool.getActiveBin();
   const binStep = pool.lbPair.binStep;
 
-  const targetBinId = DLMM.getBinIdFromPrice(
-    targetPrice,
+  // Определяем, какой из токенов пула является базовым.
+  const tokenXMint = pool.lbPair.tokenXMint.toBase58();
+  const isBaseX = tokenXMint === tokenMint;
+
+  // DLMM использует цену Y/X.
+  // Если базовый токен X — цена уже в нужной ориентации.
+  // Если базовый токен Y — переворачиваем цену.
+  const poolPrice = isBaseX ? targetPrice : 1 / targetPrice;
+
+  let targetBinId = DLMM.getBinIdFromPrice(
+    poolPrice,
     binStep,
     side === "buy",
   );
 
-  const half = Math.max(0, Math.floor((binRangeWidth - 1) / 2));
-  const minBinId = targetBinId - half;
-  const maxBinId = targetBinId + half;
+  // Определяем требуемую сторону относительно активного bin.
+  const mustBeBelow =
+    (side === "buy" && isBaseX) ||
+    (side === "sell" && !isBaseX);
 
-  // ── 1. Проверка стороны ────────────────────────────────────
-  if (side === "buy" && targetBinId >= activeBin.binId) {
-    throw new Error(
-      `BUY bin ${targetBinId} >= active bin ${activeBin.binId}; цена ${targetPrice} не ниже текущей`,
+  const originalTargetBinId = targetBinId;
+
+  // Если целевой bin оказался не на той стороне,
+  // перемещаем его на ближайший допустимый bin.
+  if (mustBeBelow && targetBinId >= activeBin.binId) {
+    targetBinId = activeBin.binId - 1;
+  }
+
+  if (!mustBeBelow && targetBinId <= activeBin.binId) {
+    targetBinId = activeBin.binId + 1;
+  }
+
+  console.log(
+    `   📍 Active bin: ${activeBin.binId}`,
+  );
+
+  console.log(
+    `   🎯 Calculated bin: ${originalTargetBinId}`,
+  );
+
+  console.log(
+    `   🎯 Selected bin: ${targetBinId}`,
+  );
+
+  if (targetBinId !== originalTargetBinId) {
+    console.log(
+      `   ⚠️ Target bin adjusted to nearest valid bin`,
     );
   }
-  if (side === "sell" && targetBinId <= activeBin.binId) {
+
+  // Только один bin на позицию.
+  const minBinId = targetBinId;
+  const maxBinId = targetBinId;
+
+  // Финальная проверка стороны.
+  if (mustBeBelow && targetBinId >= activeBin.binId) {
     throw new Error(
-      `SELL bin ${targetBinId} <= active bin ${activeBin.binId}; цена ${targetPrice} не выше текущей`,
+      `BUY bin ${targetBinId} должен быть ниже active bin ${activeBin.binId}`,
+    );
+  }
+
+  if (!mustBeBelow && targetBinId <= activeBin.binId) {
+    throw new Error(
+      `SELL bin ${targetBinId} должен быть выше active bin ${activeBin.binId}`,
     );
   }
 
@@ -114,8 +163,6 @@ export async function openLimitPosition(
   );
 
   // ── 3. Определяем стороны X и Y ────────────────────────────
-  const tokenXMint = pool.lbPair.tokenXMint.toBase58();
-  const isBaseX = tokenXMint === tokenMint;
 
   let totalXAmount: BN;
   let totalYAmount: BN;
@@ -169,5 +216,9 @@ export async function openLimitPosition(
       `price≈${targetPrice.toFixed(8)}  sig=${signature}`,
   );
 
-  return signature;
+  return {
+    signature,
+    positionAddress: positionKeypair.publicKey.toBase58(),
+    binId: targetBinId,
+  };
 }
