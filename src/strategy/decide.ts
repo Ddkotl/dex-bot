@@ -1,8 +1,5 @@
 import type { DexCoinConfig } from "../config";
-import type {
-  Dlmmpresentation,
-  PositionState,
-} from "../get_info/get_positions";
+import type { Dlmmpresentation } from "../get_info/get_positions";
 
 export type Action =
   | {
@@ -28,6 +25,13 @@ export type Action =
       currentPrice: number;
     }
   | {
+      type: "STOP_LOSS";
+      positionAddress: string;
+      currentPrice: number;
+      buyEntryPrice: number;
+      stopLossPrice: number;
+    }
+  | {
       type: "NOOP";
       reason: string;
     };
@@ -48,48 +52,50 @@ interface DecideInput {
   quoteBalance: number;
   tokenBalance: number;
   positions: Dlmmpresentation[];
+  buyEntryPrice?: number | undefined;
 }
 
-function getPositionAction(
-  position: Dlmmpresentation,
-  buyPrice: number,
-  sellPrice: number,
-  currentPrice: number,
-): Action {
-  if (position.side === "BUY" && position.state === "TOKEN_ONLY") {
-    return {
-      type: "SWITCH_TO_SELL",
-      positionAddress: position.positionAddress,
-      price: sellPrice,
-      currentPrice,
-    };
-  }
-
-  if (position.side === "SELL" && position.state === "QUOTE_ONLY") {
-    return {
-      type: "SWITCH_TO_BUY",
-      positionAddress: position.positionAddress,
-      price: buyPrice,
-      currentPrice,
-    };
-  }
-
-  const state: PositionState = position.state;
-
-  return {
-    type: "NOOP",
-    reason: `position ${position.side}/${state}: waiting for full conversion`,
-  };
+function noop(reason: string): Action {
+  return { type: "NOOP", reason };
 }
 
 export function decide(i: DecideInput): Action {
-  const { config: c, market: m, quoteBalance, tokenBalance, positions } = i;
+  const {
+    config: c,
+    market: m,
+    quoteBalance,
+    tokenBalance,
+    positions,
+    buyEntryPrice,
+  } = i;
 
   if (positions.length > 1) {
-    return {
-      type: "NOOP",
-      reason: `found ${positions.length} positions; manual review required`,
-    };
+    return noop("Обнаружено несколько DLMM-позиций. Нужна проверка.");
+  }
+
+  if (!Number.isFinite(m.currentPrice) || m.currentPrice <= 0) {
+    return noop("Некорректная текущая цена.");
+  }
+
+  const position = positions[0];
+
+  // Стоп проверяем до обычной логики переключения.
+  if (
+    position?.side === "SELL" &&
+    position.state !== "QUOTE_ONLY" &&
+    buyEntryPrice !== undefined
+  ) {
+    const stopLossPrice = buyEntryPrice * (1 - c.STOP_LOSS_PCT / 100);
+
+    if (m.currentPrice <= stopLossPrice) {
+      return {
+        type: "STOP_LOSS",
+        positionAddress: position.positionAddress,
+        currentPrice: m.currentPrice,
+        buyEntryPrice,
+        stopLossPrice,
+      };
+    }
   }
 
   const buyPrice = m.localMinPrice + c.BUY_RANGE * m.localRange;
@@ -102,42 +108,41 @@ export function decide(i: DecideInput): Action {
     buyPrice <= 0 ||
     sellPrice <= 0
   ) {
-    return {
-      type: "NOOP",
-      reason: "invalid target prices",
-    };
+    return noop("Некорректная целевая цена.");
   }
-
-  // Существующей позиции даём завершить конвертацию,
-  // даже если рыночные фильтры временно перестали выполняться.
-  const position = positions[0];
 
   if (position) {
-    return getPositionAction(position, buyPrice, sellPrice, m.currentPrice);
+    if (position.side === "BUY" && position.state === "TOKEN_ONLY") {
+      return {
+        type: "SWITCH_TO_SELL",
+        positionAddress: position.positionAddress,
+        price: sellPrice,
+        currentPrice: m.currentPrice,
+      };
+    }
+
+    if (position.side === "SELL" && position.state === "QUOTE_ONLY") {
+      return {
+        type: "SWITCH_TO_BUY",
+        positionAddress: position.positionAddress,
+        price: buyPrice,
+        currentPrice: m.currentPrice,
+      };
+    }
+
+    return noop("Ожидание полного исполнения DLMM-позиции.");
   }
 
-  // Фильтры применяем только при открытии новой позиции.
   if (!m.isSideways) {
-    return { type: "NOOP", reason: "not sideways" };
+    return noop("Рынок не находится во флэте.");
   }
 
-  if (m.rangePct > c.MAX_RANGE_PCT) {
-    return {
-      type: "NOOP",
-      reason: `range ${m.rangePct.toFixed(1)}% > MAX`,
-    };
-  }
-
-  if (m.rangePct < c.MIN_RANGE_PCT) {
-    return {
-      type: "NOOP",
-      reason: `range ${m.rangePct.toFixed(1)}% < MIN`,
-    };
+  if (m.rangePct > c.MAX_RANGE_PCT || m.rangePct < c.MIN_RANGE_PCT) {
+    return noop("Диапазон рынка вне допустимых границ.");
   }
 
   const tokenValue = tokenBalance * m.currentPrice;
 
-  // Если на кошельке достаточно base-токена — ставим SELL.
   if (tokenValue >= c.MIN_NOTIONAL) {
     return {
       type: "OPEN_SELL",
@@ -146,7 +151,6 @@ export function decide(i: DecideInput): Action {
     };
   }
 
-  // Иначе используем quote-баланс для BUY.
   if (quoteBalance >= c.MIN_NOTIONAL) {
     return {
       type: "OPEN_BUY",
@@ -155,8 +159,5 @@ export function decide(i: DecideInput): Action {
     };
   }
 
-  return {
-    type: "NOOP",
-    reason: "both balances below MIN_NOTIONAL",
-  };
+  return noop("Недостаточный баланс.");
 }

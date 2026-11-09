@@ -7,7 +7,10 @@ import {
 } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import "dotenv/config";
-
+import {
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 // ── Минты (mainnet) ──────────────────────────────────────────
 export const MINTS = {
   USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -205,4 +208,73 @@ export async function ensureUsdtAta(
   await sendAndConfirmTransaction(connection, tx, [user]);
   console.log(`   ✅ создан USDT ATA: ${ata.toBase58()}`);
   return ata;
+}
+export async function swapAllTokenToSol(
+  connection: Connection,
+  user: Keypair,
+  tokenMint: string,
+  slippageBps = 100,
+): Promise<string> {
+  const mint = new PublicKey(tokenMint);
+
+  async function getRawBalance(): Promise<bigint> {
+    const [spl, token2022] = await Promise.all([
+      connection.getParsedTokenAccountsByOwner(
+        user.publicKey,
+        { programId: TOKEN_PROGRAM_ID },
+      ),
+      connection.getParsedTokenAccountsByOwner(
+        user.publicKey,
+        { programId: TOKEN_2022_PROGRAM_ID },
+      ),
+    ]);
+
+    let total = 0n;
+
+    for (const account of [
+      ...spl.value,
+      ...token2022.value,
+    ]) {
+      const info = account.account.data.parsed.info;
+
+      if (info.mint !== mint.toBase58()) continue;
+
+      total += BigInt(info.tokenAmount.amount);
+    }
+
+    return total;
+  }
+
+  const amountRaw = await getRawBalance();
+
+  if (amountRaw === 0n) {
+    console.log("[STOP LOSS] Токен-баланс уже равен нулю.");
+    return "";
+  }
+
+  console.log(
+    `[STOP LOSS] Меняем весь баланс: ${amountRaw.toString()} RAW`,
+  );
+
+  const signature = await jupiterSwap({
+    connection,
+    user,
+    inputMint: tokenMint,
+    outputMint: MINTS.WSOL,
+    amountRaw,
+    slippageBps,
+    wrapAndUnwrapSol: true,
+  });
+
+  const remaining = await getRawBalance();
+
+  if (remaining > 0n) {
+    throw new Error(
+      `После Jupiter swap остался токен-баланс: ${remaining.toString()} RAW`,
+    );
+  }
+
+  console.log(`[STOP LOSS] Swap подтверждён: ${signature}`);
+
+  return signature;
 }

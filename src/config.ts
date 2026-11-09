@@ -94,7 +94,7 @@ export const COINS_CONFIG: DexCoinConfig[] = [
     QUOTE_QUANTITY: 0.02,
     QUOTE_DECIMALS_MULTIPLIER: 1_000_000_000,
 
-    STOP_LOSS_PCT: 20,
+    STOP_LOSS_PCT: 10,
 
     BUY_RANGE: 0.1,
     SELL_RANGE: 0.6,

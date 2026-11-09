@@ -18,17 +18,11 @@ export interface OpenLimitPositionParams {
   binRangeWidth?: number;
 }
 
-/**
- * Конвертирует bin ID в индекс bin array (корзины).
- * Повторяет логику binIdToBinArrayIndex из SDK Meteora:
- *  - для binId >= 0: floor(binId / 70)
- *  - для binId < 0:  floor((binId - 69) / 70)
- *    (bin -1..-70 → array -1; bin -71..-140 → array -2 и т.д.)
- */
 function binIdToBinArrayIndex(binId: number): number {
   if (binId >= 0) {
     return Math.floor(binId / 70);
   }
+
   return Math.floor((binId - 69) / 70);
 }
 
@@ -38,6 +32,7 @@ export async function openLimitPosition(
   signature: string;
   positionAddress: string;
   binId: number;
+  binPrice: number;
 }> {
   const {
     connection,
@@ -47,40 +42,39 @@ export async function openLimitPosition(
     side,
     targetPrice,
     amountRaw,
-    binRangeWidth = 1,
   } = params;
+
+  if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+    throw new Error(`Некорректная targetPrice: ${targetPrice}`);
+  }
+
+  if (amountRaw.lte(new BN(0))) {
+    throw new Error("amountRaw должен быть больше нуля");
+  }
 
   const pool = await DLMM.create(connection, new PublicKey(poolAddress), {
     cluster: "mainnet-beta",
   });
 
   const activeBin = await pool.getActiveBin();
-  const binStep = pool.lbPair.binStep;
 
-  // Определяем, какой из токенов пула является базовым.
   const tokenXMint = pool.lbPair.tokenXMint.toBase58();
   const isBaseX = tokenXMint === tokenMint;
 
-  // DLMM использует цену Y/X.
-  // Если базовый токен X — цена уже в нужной ориентации.
-  // Если базовый токен Y — переворачиваем цену.
+  // Цена пула всегда Y/X.
   const poolPrice = isBaseX ? targetPrice : 1 / targetPrice;
 
-  let targetBinId = DLMM.getBinIdFromPrice(
+  const originalTargetBinId = DLMM.getBinIdFromPrice(
     poolPrice,
-    binStep,
+    pool.lbPair.binStep,
     side === "buy",
   );
 
-  // Определяем требуемую сторону относительно активного bin.
+  let targetBinId = originalTargetBinId;
+
   const mustBeBelow =
-    (side === "buy" && isBaseX) ||
-    (side === "sell" && !isBaseX);
+    (side === "buy" && isBaseX) || (side === "sell" && !isBaseX);
 
-  const originalTargetBinId = targetBinId;
-
-  // Если целевой bin оказался не на той стороне,
-  // перемещаем его на ближайший допустимый bin.
   if (mustBeBelow && targetBinId >= activeBin.binId) {
     targetBinId = activeBin.binId - 1;
   }
@@ -89,80 +83,44 @@ export async function openLimitPosition(
     targetBinId = activeBin.binId + 1;
   }
 
-  console.log(
-    `   📍 Active bin: ${activeBin.binId}`,
-  );
+  console.log(`[DLMM] Active bin: ${activeBin.binId}`);
+  console.log(`[DLMM] Calculated bin: ${originalTargetBinId}`);
+  console.log(`[DLMM] Selected bin: ${targetBinId}`);
 
-  console.log(
-    `   🎯 Calculated bin: ${originalTargetBinId}`,
-  );
-
-  console.log(
-    `   🎯 Selected bin: ${targetBinId}`,
-  );
-
-  if (targetBinId !== originalTargetBinId) {
-    console.log(
-      `   ⚠️ Target bin adjusted to nearest valid bin`,
-    );
-  }
-
-  // Только один bin на позицию.
   const minBinId = targetBinId;
   const maxBinId = targetBinId;
 
-  // Финальная проверка стороны.
   if (mustBeBelow && targetBinId >= activeBin.binId) {
-    throw new Error(
-      `BUY bin ${targetBinId} должен быть ниже active bin ${activeBin.binId}`,
-    );
+    throw new Error("BUY bin должен находиться ниже active bin");
   }
 
   if (!mustBeBelow && targetBinId <= activeBin.binId) {
-    throw new Error(
-      `SELL bin ${targetBinId} должен быть выше active bin ${activeBin.binId}`,
-    );
+    throw new Error("SELL bin должен находиться выше active bin");
   }
 
-  // ── 2. Проверка существования Bin Arrays ──────────────────
-  console.log(
-    `   🔍 Проверка корзин для диапазона [${minBinId}..${maxBinId}]...`,
-  );
-
+  // Проверяем наличие Bin Arrays.
   const existingBinArrays = await pool.getBinArrays();
-  // ✅ Правильное поле: ba.account.index (BN), а не binArrayIndex
+
   const existingIndexes = new Set<number>(
     existingBinArrays.map((ba) => ba.account.index.toNumber()),
   );
 
   const requiredIndexes = new Set<number>();
+
   for (let binId = minBinId; binId <= maxBinId; binId++) {
     requiredIndexes.add(binIdToBinArrayIndex(binId));
   }
 
-  const missingIndexes: number[] = [];
-  for (const idx of requiredIndexes) {
-    if (!existingIndexes.has(idx)) {
-      missingIndexes.push(idx);
-    }
-  }
-
-  if (missingIndexes.length > 0) {
-    const rentCost = missingIndexes.length * 0.075;
-    throw new Error(
-      `❌ Отмена: для диапазона [${minBinId}..${maxBinId}] ` +
-        `не хватает ${missingIndexes.length} корзин ` +
-        `(индексы: ${missingIndexes.join(", ")}). ` +
-        `Создание новых корзин стоит ~${rentCost.toFixed(2)} SOL безвозвратно. ` +
-        `Сделка пропущена для экономии средств.`,
-    );
-  }
-
-  console.log(
-    `   ✅ Все необходимые корзины (${requiredIndexes.size}) уже существуют. Рент не потребуется.`,
+  const missingIndexes = [...requiredIndexes].filter(
+    (idx) => !existingIndexes.has(idx),
   );
 
-  // ── 3. Определяем стороны X и Y ────────────────────────────
+  if (missingIndexes.length > 0) {
+    throw new Error(
+      `Не хватает Bin Arrays: ${missingIndexes.join(", ")}. ` +
+        "Открытие позиции отменено.",
+    );
+  }
 
   let totalXAmount: BN;
   let totalYAmount: BN;
@@ -190,7 +148,13 @@ export async function openLimitPosition(
     }
   }
 
-  // ── 4. Открываем позицию ───────────────────────────────────
+  // Получаем цену именно выбранного bin.
+  const binPrice = targetPrice;
+
+  if (!Number.isFinite(binPrice) || binPrice <= 0) {
+    throw new Error(`Не удалось вычислить цену bin ${targetBinId}`);
+  }
+
   const positionKeypair = Keypair.generate();
 
   const tx = await pool.initializePositionAndAddLiquidityByStrategy({
@@ -206,19 +170,31 @@ export async function openLimitPosition(
     },
   });
 
-  const signature = await sendAndConfirmTransaction(connection, tx, [
-    user,
-    positionKeypair,
-  ]);
+  const transactions = Array.isArray(tx) ? tx : [tx];
+
+  let signature = "";
+
+  for (const transaction of transactions) {
+    signature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [user, positionKeypair],
+      {
+        skipPreflight: false,
+        commitment: "confirmed",
+      },
+    );
+  }
 
   console.log(
-    `   ✅ limit ${side.toUpperCase()} bin=[${minBinId}..${maxBinId}] ` +
-      `price≈${targetPrice.toFixed(8)}  sig=${signature}`,
+    `[DLMM] ${side.toUpperCase()} открыт | ` +
+      `bin=${targetBinId} | price=${binPrice} | sig=${signature}`,
   );
 
   return {
     signature,
     positionAddress: positionKeypair.publicKey.toBase58(),
     binId: targetBinId,
+    binPrice,
   };
 }

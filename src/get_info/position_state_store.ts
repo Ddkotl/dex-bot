@@ -1,90 +1,121 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 
-export type StoredPositionSide = "BUY" | "SELL";
+export type PositionSide = "BUY" | "SELL";
 
-interface StoredPosition {
-  side: StoredPositionSide;
-  createdAt: string;
+export interface StoredPosition {
+  side: PositionSide;
+  buyEntryPrice?: number;
 }
 
-type PositionStateFile = Record<string, StoredPosition>;
+type Store = Record<string, StoredPosition>;
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
-const STATE_FILE = path.join(DATA_DIR, "position-state.json");
+const DIR = path.join(process.cwd(), "data");
+const FILE = path.join(DIR, "position_state.json");
 
-function readState(): PositionStateFile {
-  if (!existsSync(STATE_FILE)) {
+function readStore(): Store {
+  console.log("[POSITION STORE] cwd:", process.cwd());
+  console.log("[POSITION STORE] file:", FILE);
+  console.log("[POSITION STORE] exists:", fs.existsSync(FILE));
+
+  if (!fs.existsSync(FILE)) {
+    console.log("[POSITION STORE] Файл не найден, возвращаю пустое состояние");
     return {};
   }
 
-  try {
-    return JSON.parse(
-      readFileSync(STATE_FILE, "utf8"),
-    ) as PositionStateFile;
-  } catch (error) {
-    throw new Error(
-      `Не удалось прочитать ${STATE_FILE}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
+  const raw = fs.readFileSync(FILE, "utf8");
+
+  console.log("[POSITION STORE] raw:", raw);
+
+  const parsed: unknown = JSON.parse(raw);
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Некорректный формат position_state.json");
   }
+
+  return parsed as Store;
 }
 
-function writeState(state: PositionStateFile): void {
-  mkdirSync(DATA_DIR, { recursive: true });
+function writeStore(store: Store): void {
+  fs.mkdirSync(DIR, { recursive: true });
 
-  const tempFile = `${STATE_FILE}.tmp`;
+  const temp = `${FILE}.tmp`;
 
-  writeFileSync(
-    tempFile,
-    JSON.stringify(state, null, 2),
-    "utf8",
-  );
+  fs.writeFileSync(temp, JSON.stringify(store, null, 2), "utf8");
 
-  renameSync(tempFile, STATE_FILE);
+  fs.renameSync(temp, FILE);
 }
 
-export function savePositionSide(
+export function getStoredPosition(
   positionAddress: string,
-  side: StoredPositionSide,
-): void {
-  const state = readState();
-
-  state[positionAddress] = {
-    side,
-    createdAt: new Date().toISOString(),
-  };
-
-  writeState(state);
-
-  console.log(
-    `[POSITION STATE] Сохранено: ${side} ${positionAddress}`,
-  );
+): StoredPosition | null {
+  return readStore()[positionAddress] ?? null;
 }
 
 export function getStoredPositionSide(
   positionAddress: string,
-): StoredPositionSide | "UNKNOWN" {
-  const state = readState();
-  return state[positionAddress]?.side ?? "UNKNOWN";
+): PositionSide | null {
+  const store = readStore();
+
+  console.log("[POSITION STORE] requested address:", positionAddress);
+  console.log("[POSITION STORE] available addresses:", Object.keys(store));
+
+  const position = store[positionAddress];
+
+  console.log("[POSITION STORE] found position:", position);
+
+  return position?.side ?? null;
+}
+
+export function getStoredBuyEntryPrice(positionAddress: string): number | null {
+  const price = getStoredPosition(positionAddress)?.buyEntryPrice;
+
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
+  return price;
+}
+
+export function savePosition(
+  positionAddress: string,
+  side: PositionSide,
+  buyEntryPrice?: number,
+): void {
+  if (
+    buyEntryPrice !== undefined &&
+    (!Number.isFinite(buyEntryPrice) || buyEntryPrice <= 0)
+  ) {
+    throw new Error(`Некорректная цена BUY: ${buyEntryPrice}`);
+  }
+
+  const store = readStore();
+
+  store[positionAddress] = {
+    side,
+    ...(buyEntryPrice !== undefined ? { buyEntryPrice } : {}),
+  };
+
+  writeStore(store);
+}
+
+export function removePosition(positionAddress: string): void {
+  const store = readStore();
+
+  delete store[positionAddress];
+
+  writeStore(store);
+}
+
+// Совместимость со старым get_positions.ts и старым execute.ts.
+export function savePositionSide(
+  positionAddress: string,
+  side: PositionSide,
+  buyEntryPrice?: number,
+): void {
+  savePosition(positionAddress, side, buyEntryPrice);
 }
 
 export function removePositionSide(positionAddress: string): void {
-  const state = readState();
-
-  if (state[positionAddress]) {
-    delete state[positionAddress];
-    writeState(state);
-
-    console.log(
-      `[POSITION STATE] Удалено: ${positionAddress}`,
-    );
-  }
+  removePosition(positionAddress);
 }

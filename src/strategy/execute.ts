@@ -4,9 +4,11 @@ import { openLimitPosition } from "../actions/openLimitPosition";
 import { closeLimitPosition } from "../actions/closeLimitPosition";
 
 import { getAssetBalances } from "../get_info/get_balance";
+
 import {
-  savePositionSide,
-  removePositionSide,
+  savePosition,
+  removePosition,
+  getStoredBuyEntryPrice,
 } from "../get_info/position_state_store";
 
 import type { DexCoinConfig } from "../config";
@@ -14,6 +16,7 @@ import type { Action } from "./decide";
 
 import { loadWalletKeypair } from "../utits/keypair";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
+import { swapAllTokenToSol } from "../treasury/swap";
 
 function toRaw(amount: number, multiplier: number): BN {
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -31,15 +34,8 @@ export async function executeAction(
 
   const user = loadWalletKeypair();
 
-  const openBuy = async (price: number, quoteAmount: number) => {
-    const amountRaw = toRaw(
-      quoteAmount,
-      config.QUOTE_DECIMALS_MULTIPLIER,
-    );
-
-    console.log(
-      `[${config.SYMBOL}] OPEN_BUY price=${price} quote=${quoteAmount} raw=${amountRaw.toString()}`,
-    );
+  const openBuy = async (price: number, quoteAmount: number): Promise<void> => {
+    const amountRaw = toRaw(quoteAmount, config.QUOTE_DECIMALS_MULTIPLIER);
 
     const result = await openLimitPosition({
       connection: pub_wallet_connection,
@@ -51,16 +47,20 @@ export async function executeAction(
       amountRaw,
     });
 
-    savePositionSide(result.positionAddress, "BUY");
-  };
-
-  const openSell = async (price: number, tokens: number) => {
-    const tokenMultiplier = 10 ** config.TOKEN_DECIMALS;
-    const amountRaw = toRaw(tokens, tokenMultiplier);
+    savePosition(result.positionAddress, "BUY", result.binPrice);
 
     console.log(
-      `[${config.SYMBOL}] OPEN_SELL price=${price} tokens=${tokens} raw=${amountRaw.toString()}`,
+      `[${config.SYMBOL}] BUY сохранён. ` +
+        `bin=${result.binId}, entry=${result.binPrice}`,
     );
+  };
+
+  const openSell = async (
+    price: number,
+    tokens: number,
+    buyEntryPrice?: number,
+  ): Promise<void> => {
+    const amountRaw = toRaw(tokens, 10 ** config.TOKEN_DECIMALS);
 
     const result = await openLimitPosition({
       connection: pub_wallet_connection,
@@ -72,7 +72,12 @@ export async function executeAction(
       amountRaw,
     });
 
-    savePositionSide(result.positionAddress, "SELL");
+    savePosition(result.positionAddress, "SELL", buyEntryPrice);
+
+    console.log(
+      `[${config.SYMBOL}] SELL сохранён. ` +
+        `bin=${result.binId}, BUY entry=${buyEntryPrice ?? "не задан"}`,
+    );
   };
 
   if (action.type === "OPEN_BUY") {
@@ -85,10 +90,12 @@ export async function executeAction(
     return;
   }
 
-  if (action.type === "SWITCH_TO_BUY") {
-    console.log(
-      `[${config.SYMBOL}] SWITCH BUY: закрываем ${action.positionAddress}`,
-    );
+  if (action.type === "SWITCH_TO_SELL") {
+    const buyEntryPrice = getStoredBuyEntryPrice(action.positionAddress);
+
+    if (buyEntryPrice === null) {
+      throw new Error("Не найдена цена BUY. Переключение на SELL отменено.");
+    }
 
     await closeLimitPosition({
       connection: pub_wallet_connection,
@@ -97,8 +104,29 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    // Удаляем старую запись только после подтверждённого закрытия.
-    removePositionSide(action.positionAddress);
+    const balance = await getAssetBalances(
+      user.publicKey.toBase58(),
+      config.TOKEN_MINT,
+      config.SYMBOL,
+    );
+
+    if (balance.token * action.currentPrice < config.MIN_NOTIONAL) {
+      throw new Error("После закрытия BUY недостаточно токенов для SELL.");
+    }
+
+    await openSell(action.price, balance.token, buyEntryPrice);
+
+    removePosition(action.positionAddress);
+    return;
+  }
+
+  if (action.type === "SWITCH_TO_BUY") {
+    await closeLimitPosition({
+      connection: pub_wallet_connection,
+      poolAddress: config.POOL_ADDRESS,
+      user,
+      positionAddress: action.positionAddress,
+    });
 
     const balance = await getAssetBalances(
       user.publicKey.toBase58(),
@@ -109,26 +137,24 @@ export async function executeAction(
     const quoteBalance = balance.sol + balance.wsol;
 
     if (quoteBalance < config.MIN_NOTIONAL) {
-      console.log(
-        `[${config.SYMBOL}] SWITCH BUY отменён: quote balance=${quoteBalance}`,
-      );
-      return;
+      throw new Error("Недостаточно SOL/WSOL для BUY.");
     }
 
-    const amount = Math.min(
-      config.QUOTE_QUANTITY,
-      quoteBalance,
-    );
+    await openBuy(action.price, Math.min(config.QUOTE_QUANTITY, quoteBalance));
 
-    await openBuy(action.price, amount);
+    removePosition(action.positionAddress);
     return;
   }
 
-  if (action.type === "SWITCH_TO_SELL") {
+  if (action.type === "STOP_LOSS") {
     console.log(
-      `[${config.SYMBOL}] SWITCH SELL: закрываем ${action.positionAddress}`,
+      `[${config.SYMBOL}] STOP LOSS! ` +
+        `current=${action.currentPrice} ` +
+        `entry=${action.buyEntryPrice} ` +
+        `stop=${action.stopLossPrice}`,
     );
 
+    // Закрываем SELL на 100% и собираем комиссии.
     await closeLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
@@ -136,24 +162,17 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    removePositionSide(action.positionAddress);
-
-    const balance = await getAssetBalances(
-      user.publicKey.toBase58(),
+    // Продаём весь остаток токена в SOL.
+    await swapAllTokenToSol(
+      pub_wallet_connection,
+      user,
       config.TOKEN_MINT,
-      config.SYMBOL,
+      100,
     );
 
-    const tokens = balance.token;
-    const tokenValue = tokens * action.currentPrice;
+    // Очищаем состояние только после успешного выхода.
+    removePosition(action.positionAddress);
 
-    if (tokenValue < config.MIN_NOTIONAL) {
-      console.log(
-        `[${config.SYMBOL}] SWITCH SELL отменён: token value=${tokenValue}`,
-      );
-      return;
-    }
-
-    await openSell(action.price, tokens);
+    console.log(`[${config.SYMBOL}] STOP LOSS завершён.`);
   }
 }
