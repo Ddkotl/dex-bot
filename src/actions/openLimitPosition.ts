@@ -18,12 +18,10 @@ export interface OpenLimitPositionParams {
   binRangeWidth?: number;
 }
 
+// Индекс Bin Array.
+// Math.floor корректно обрабатывает отрицательные bin ID.
 function binIdToBinArrayIndex(binId: number): number {
-  if (binId >= 0) {
-    return Math.floor(binId / 70);
-  }
-
-  return Math.floor((binId - 69) / 70);
+  return Math.floor(binId / 70);
 }
 
 export async function openLimitPosition(
@@ -57,12 +55,57 @@ export async function openLimitPosition(
   });
 
   const activeBin = await pool.getActiveBin();
-
+  console.log("==========  DLMM INFO ==========");
+  console.log("Bin Step:", pool.lbPair.binStep);
+  console.log("Active Bin ID:", activeBin.binId);
+  console.log("Active Bin Price:", activeBin.price);
+  console.log("Token X Mint:", pool.lbPair.tokenXMint.toBase58());
+  console.log("Token Y Mint:", pool.lbPair.tokenYMint.toBase58());
+  console.log("====================================");
+  console.log("Active bin raw price:", activeBin.price);
+  console.log(
+    " decimals:",
+    await connection
+      .getTokenSupply(new PublicKey(tokenMint))
+      .then((result) => result.value.decimals),
+  );
+  console.log("SOL decimals:", 9);
   const tokenXMint = pool.lbPair.tokenXMint.toBase58();
-  const isBaseX = tokenXMint === tokenMint;
+  const tokenYMint = pool.lbPair.tokenYMint.toBase58();
 
-  // Цена пула всегда Y/X.
-  const poolPrice = isBaseX ? targetPrice : 1 / targetPrice;
+  const isBaseX = tokenXMint === tokenMint;
+  const isBaseY = tokenYMint === tokenMint;
+
+  if (!isBaseX && !isBaseY) {
+    throw new Error(
+      `Токен ${tokenMint} не найден среди Token X и Token Y пула`,
+    );
+  }
+
+  // Получаем decimals обоих токенов пула.
+  const [xSupply, ySupply] = await Promise.all([
+    connection.getTokenSupply(pool.lbPair.tokenXMint),
+    connection.getTokenSupply(pool.lbPair.tokenYMint),
+  ]);
+
+  const decimalsX = xSupply.value.decimals;
+  const decimalsY = ySupply.value.decimals;
+
+  // Приводим человеческую цену к формату DLMM.
+  const decimalMultiplier = Math.pow(10, decimalsY - decimalsX);
+
+  const humanPoolPrice = isBaseX ? targetPrice : 1 / targetPrice;
+
+  const poolPrice = humanPoolPrice * decimalMultiplier;
+
+  console.log("========== PRICE CONVERSION ==========");
+  console.log("Target price (human):", targetPrice);
+  console.log("Token X decimals:", decimalsX);
+  console.log("Token Y decimals:", decimalsY);
+  console.log("Decimal multiplier:", decimalMultiplier);
+  console.log("Pool price (DLMM):", poolPrice);
+  console.log("Active bin price:", activeBin.price);
+  console.log("======================================");
 
   const originalTargetBinId = DLMM.getBinIdFromPrice(
     poolPrice,
@@ -98,7 +141,7 @@ export async function openLimitPosition(
     throw new Error("SELL bin должен находиться выше active bin");
   }
 
-  // Проверяем наличие Bin Arrays.
+  // Проверяем наличие необходимых Bin Arrays.
   const existingBinArrays = await pool.getBinArrays();
 
   const existingIndexes = new Set<number>(
@@ -114,6 +157,10 @@ export async function openLimitPosition(
   const missingIndexes = [...requiredIndexes].filter(
     (idx) => !existingIndexes.has(idx),
   );
+
+  console.log(`[DLMM] Required Bin Arrays: ${[...requiredIndexes].join(", ")}`);
+
+  console.log(`[DLMM] Existing Bin Arrays: ${[...existingIndexes].join(", ")}`);
 
   if (missingIndexes.length > 0) {
     throw new Error(
@@ -148,7 +195,8 @@ export async function openLimitPosition(
     }
   }
 
-  // Получаем цену именно выбранного bin.
+  // Сохраняем переданную целевую цену.
+  // Это не гарантирует совпадение с фактической ценой исполнения.
   const binPrice = targetPrice;
 
   if (!Number.isFinite(binPrice) || binPrice <= 0) {
