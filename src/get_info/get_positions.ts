@@ -1,13 +1,8 @@
-
 import DLMM from "@meteora-ag/dlmm";
 import { PublicKey } from "@solana/web3.js";
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
 import { getStoredPositionSide } from "./position_state_store";
-export type PositionState =
-  | "QUOTE_ONLY"
-  | "TOKEN_ONLY"
-  | "MIXED"
-  | "EMPTY";
+export type PositionState = "QUOTE_ONLY" | "TOKEN_ONLY" | "MIXED" | "EMPTY";
 
 export type PositionSide = "BUY" | "SELL" | "UNKNOWN";
 
@@ -64,25 +59,13 @@ export async function getActiveLimitPositions(
   for (const position of userPositions) {
     const data = position.positionData;
 
-    const totalX = rawToUi(
-      data.totalXAmount,
-      pool.tokenX.mint.decimals,
-    );
+    const totalX = rawToUi(data.totalXAmount, pool.tokenX.mint.decimals);
 
-    const totalY = rawToUi(
-      data.totalYAmount,
-      pool.tokenY.mint.decimals,
-    );
+    const totalY = rawToUi(data.totalYAmount, pool.tokenY.mint.decimals);
 
-    const feeX = rawToUi(
-      data.feeX,
-      pool.tokenX.mint.decimals,
-    );
+    const feeX = rawToUi(data.feeX, pool.tokenX.mint.decimals);
 
-    const feeY = rawToUi(
-      data.feeY,
-      pool.tokenY.mint.decimals,
-    );
+    const feeY = rawToUi(data.feeY, pool.tokenY.mint.decimals);
 
     const totalTokens = isBaseX ? totalX : totalY;
     const totalQuote = isBaseX ? totalY : totalX;
@@ -91,26 +74,25 @@ export async function getActiveLimitPositions(
 
     const bins = data.positionBinData ?? [];
 
-    const binIds = bins
-      .map((bin) => Number(bin.binId))
-      .filter(Number.isFinite);
+    const binIds = bins.map((bin) => Number(bin.binId)).filter(Number.isFinite);
 
-    const firstBinId =
-      binIds.length > 0 ? Math.min(...binIds) : null;
+    const firstBinId = binIds.length > 0 ? Math.min(...binIds) : null;
 
-    const lastBinId =
-      binIds.length > 0 ? Math.max(...binIds) : null;
+    const lastBinId = binIds.length > 0 ? Math.max(...binIds) : null;
 
-   const side: PositionSide = getStoredPositionSide(
-  position.publicKey.toBase58(),
-);
+    const storedSide = getStoredPositionSide(position.publicKey.toBase58());
+
+    if (!storedSide) {
+      throw new Error(
+        `Не найден side для позиции ${position.publicKey.toBase58()}`,
+      );
+    }
+
+    const side: PositionSide = storedSide;
 
     let state: PositionState;
 
-    if (
-      totalTokens <= tokenTolerance &&
-      totalQuote <= quoteTolerance
-    ) {
+    if (totalTokens <= tokenTolerance && totalQuote <= quoteTolerance) {
       state = "EMPTY";
     } else if (totalTokens <= tokenTolerance) {
       state = "QUOTE_ONLY";
