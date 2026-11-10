@@ -1,15 +1,37 @@
 {
-  "workbench.iconTheme": "material-icon-theme",
-  "workbench.colorTheme": "GitHub Dark",
+  "git.ignoreLimitWarning": true,
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "ms-python.autopep8",
-  "editor.minimap.enabled": false,
-  "editor.glyphMargin": false,
-  "[python]": {
-    "diffEditor.ignoreTrimWhitespace": false,
-    "editor.formatOnType": true,
-    "editor.wordBasedSuggestions": "off"
+  "editor.codeActionsOnSave": {
+    "source.addMissingImports": "always",
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "always"
   },
-  "code-runner.clearPreviousOutput": true,
-  "code-runner.saveFileBeforeRun": true
+  "editor.stickyScroll.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/node_modules": false,
+    "**/dist": false
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true
+  },
+  "workbench.list.smoothScrolling": true,
+  "workbench.colorTheme": "GitHub Dark",
+  "workbench.iconTheme": "material-icon-theme",
+  "terminal.integrated.scrollback": 10000,
+  "terminal.integrated.splitCwd": "inherited",
+  "terminal.integrated.gpuAcceleration": "on",
+  "terminal.integrated.copyOnSelection": true,
+  "terminal.integrated.cursorBlinking": true,
+  "terminal.integrated.cursorStyle": "block",
+  "editor.links": true,
+  "npm.packageManager": "npm",
+  "npm.scriptExplorerAction": "open",
+  "js/ts.updateImportsOnFileMove.enabled": "always"
 }

@@ -1,8 +1,22 @@
 {
   "recommendations": [
+    "ms-vscode.vscode-typescript-next",
+    "mattpocock.ts-error-translator",
+    "Prisma.prisma",
+    "ms-azuretools.vscode-docker",
+    "cweijan.vscode-database-client2",
+    "bradlc.vscode-tailwindcss",
+    "formulahendry.auto-rename-tag",
+    "esbenp.prettier-vscode",
+    "rvest.vs-code-prettier-eslint",
+    "usernamehw.errorlens",
+    "pflannery.vscode-versionlens",
+    "christian-kohler.npm-intellisense",
+    "redhat.fabric8-analytics",
+    "christian-kohler.path-intellisense",
     "PKief.material-icon-theme",
-    "ms-python.python",
-    "formulahendry.code-runner",
-    "ms-python.autopep8"
+    "GitHub.github-vscode-theme",
+    "mikestead.dotenv",
+    "eamodio.gitlens"
   ]
 }
