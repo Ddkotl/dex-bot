@@ -24,9 +24,7 @@ function toRaw(amount: number, multiplier: number): BN {
     throw new Error(`Некорректная сумма: ${amount}`);
   }
 
-  return new BN(
-    Math.floor(amount * multiplier).toString(),
-  );
+  return new BN(Math.floor(amount * multiplier).toString());
 }
 
 export async function executeAction(
@@ -50,7 +48,7 @@ export async function executeAction(
   const openBuy = async (
     price: number,
     quoteAmount: number,
-  ): Promise<void> => {
+  ): Promise<string> => {
     const amountRaw = toRaw(
       quoteAmount,
       config.QUOTE_DECIMALS_MULTIPLIER,
@@ -80,6 +78,7 @@ export async function executeAction(
       "BUY",
       metadata,
       result.binPrice,
+      price,
     );
 
     console.log(
@@ -88,6 +87,8 @@ export async function executeAction(
       `bin=${result.binId}, ` +
       `entry=${result.binPrice}`,
     );
+
+    return result.positionAddress;
   };
 
   // --------------------------------------------------
@@ -98,7 +99,7 @@ export async function executeAction(
     price: number,
     tokens: number,
     buyEntryPrice: number,
-  ): Promise<void> => {
+  ): Promise<string> => {
     if (
       !Number.isFinite(buyEntryPrice) ||
       buyEntryPrice <= 0
@@ -123,12 +124,12 @@ export async function executeAction(
       amountRaw,
     });
 
-    // Сначала сохраняем SELL с исходной ценой BUY.
     savePosition(
       result.positionAddress,
       "SELL",
       metadata,
       buyEntryPrice,
+      price,
     );
 
     console.log(
@@ -137,6 +138,8 @@ export async function executeAction(
       `bin=${result.binId}, ` +
       `BUY entry=${buyEntryPrice}`,
     );
+
+    return result.positionAddress;
   };
 
   // --------------------------------------------------
@@ -144,11 +147,7 @@ export async function executeAction(
   // --------------------------------------------------
 
   if (action.type === "OPEN_BUY") {
-    await openBuy(
-      action.price,
-      action.quoteAmount,
-    );
-
+    await openBuy(action.price, action.quoteAmount);
     return;
   }
 
@@ -161,6 +160,107 @@ export async function executeAction(
       action.price,
       action.tokens,
       action.buyEntryPrice,
+    );
+
+    return;
+  }
+
+  // --------------------------------------------------
+  // REFRESH EXPIRED ORDER
+  // --------------------------------------------------
+
+  if (action.type === "REFRESH_ORDER") {
+    const oldPositionAddress = action.positionAddress;
+
+    console.log(
+      `[${config.SYMBOL}] ORDER TIMEOUT: обновляем ${action.side}. ` +
+      `Старая позиция=${oldPositionAddress}, ` +
+      `новая цена=${action.price}`,
+    );
+
+    let buyEntryPrice: number | null = null;
+
+    if (action.side === "SELL") {
+      buyEntryPrice = getStoredBuyEntryPrice(oldPositionAddress);
+
+      if (
+        buyEntryPrice === null ||
+        !Number.isFinite(buyEntryPrice) ||
+        buyEntryPrice <= 0
+      ) {
+        throw new Error(
+          `[${config.SYMBOL}] Нельзя обновить SELL: ` +
+          `отсутствует buyEntryPrice.`,
+        );
+      }
+
+      if (
+        action.buyEntryPrice === undefined ||
+        Math.abs(action.buyEntryPrice - buyEntryPrice) > 1e-12
+      ) {
+        throw new Error(
+          `[${config.SYMBOL}] buyEntryPrice изменился. ` +
+          `Обновление SELL отменено.`,
+        );
+      }
+    }
+
+    // 1. Закрываем старую позицию.
+    await closeLimitPosition({
+      connection: pub_wallet_connection,
+      poolAddress: config.POOL_ADDRESS,
+      user,
+      positionAddress: oldPositionAddress,
+    });
+
+    // 2. Получаем фактические балансы после закрытия.
+    const balance = await getAssetBalances(
+      user.publicKey.toBase58(),
+      config.TOKEN_MINT,
+      config.SYMBOL,
+    );
+
+    // 3. Создаём новую позицию.
+    if (action.side === "BUY") {
+      const quoteBalance = balance.sol + balance.wsol;
+
+      if (quoteBalance < config.MIN_NOTIONAL) {
+        throw new Error(
+          `[${config.SYMBOL}] Старая BUY закрыта, ` +
+          `но недостаточно SOL/WSOL для новой BUY. ` +
+          `Старая запись сохранена: ${oldPositionAddress}`,
+        );
+      }
+
+      await openBuy(
+        action.price,
+        Math.min(config.QUOTE_QUANTITY, quoteBalance),
+      );
+    } else {
+      const tokens = balance.token ?? 0;
+
+      if (tokens * action.price < config.MIN_NOTIONAL) {
+        throw new Error(
+          `[${config.SYMBOL}] Старая SELL закрыта, ` +
+          `но недостаточно токенов для новой SELL. ` +
+          `Старая запись сохранена: ${oldPositionAddress}`,
+        );
+      }
+
+      await openSell(
+        action.price,
+        tokens,
+        buyEntryPrice!,
+      );
+    }
+
+    // 4. Новая запись уже сохранена.
+    // Только теперь удаляем старую.
+    removePosition(oldPositionAddress);
+
+    console.log(
+      `[${config.SYMBOL}] ORDER TIMEOUT: ` +
+      `${action.side} успешно пересоздана.`,
     );
 
     return;
@@ -191,7 +291,6 @@ export async function executeAction(
       `Сохраняем BUY entry=${buyEntryPrice}`,
     );
 
-    // 1. Закрываем BUY on-chain.
     await closeLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
@@ -199,9 +298,6 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    // ВАЖНО: старую запись BUY пока НЕ удаляем.
-
-    // 2. Проверяем фактический баланс токенов.
     const balance = await getAssetBalances(
       user.publicKey.toBase58(),
       config.TOKEN_MINT,
@@ -219,15 +315,12 @@ export async function executeAction(
       );
     }
 
-    // 3. Открываем SELL и переносим цену BUY.
-    // Если открытие не удастся, старая запись останется.
     await openSell(
       action.price,
       balance.token,
       buyEntryPrice,
     );
 
-    // 4. Удаляем BUY только после успешного сохранения SELL.
     removePosition(action.positionAddress);
 
     console.log(
@@ -248,7 +341,6 @@ export async function executeAction(
       `закрываем ${action.positionAddress}`,
     );
 
-    // 1. Закрываем старую SELL.
     await closeLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
@@ -256,7 +348,6 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    // 2. Получаем актуальный баланс.
     const balance = await getAssetBalances(
       user.publicKey.toBase58(),
       config.TOKEN_MINT,
@@ -271,16 +362,11 @@ export async function executeAction(
       );
     }
 
-    // 3. Открываем новую BUY.
     await openBuy(
       action.price,
-      Math.min(
-        config.QUOTE_QUANTITY,
-        quoteBalance,
-      ),
+      Math.min(config.QUOTE_QUANTITY, quoteBalance),
     );
 
-    // 4. Удаляем старую SELL только после успешного открытия BUY.
     removePosition(action.positionAddress);
 
     console.log(
@@ -302,7 +388,6 @@ export async function executeAction(
       `stop=${action.stopLossPrice}`,
     );
 
-    // Проверяем, что цена входа не потерялась и не изменилась.
     const storedPrice = getStoredBuyEntryPrice(
       action.positionAddress,
     );
@@ -317,7 +402,6 @@ export async function executeAction(
       );
     }
 
-    // 1. Закрываем SELL.
     await closeLimitPosition({
       connection: pub_wallet_connection,
       poolAddress: config.POOL_ADDRESS,
@@ -325,7 +409,6 @@ export async function executeAction(
       positionAddress: action.positionAddress,
     });
 
-    // 2. Продаём остаток токенов в SOL.
     await swapAllTokenToSol(
       pub_wallet_connection,
       user,
@@ -333,7 +416,6 @@ export async function executeAction(
       100,
     );
 
-    // 3. Удаляем запись только после успешного выхода.
     removePosition(action.positionAddress);
 
     console.log(

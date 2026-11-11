@@ -9,6 +9,7 @@ import {
   getStoredBuyEntryPrice,
   getStoredBuyEntryPriceForPool,
   getStoredPositionsForPool,
+  getStoredPosition,
 } from "../get_info/position_state_store";
 
 import type { DexCoinConfig } from "../config";
@@ -86,25 +87,35 @@ export async function tradeLoop(config: DexCoinConfig) {
         getStoredBuyEntryPriceForPool(POOL_ADDRESS) ??
         undefined;
 
-      // Если есть активная SELL, цена входа обязательна.
-      if (activePosition?.side === "SELL") {
-        const positionPrice = getStoredBuyEntryPrice(
+      let positionCreatedAt: number | undefined;
+
+      // Получаем состояние именно активной позиции.
+      if (activePosition) {
+        const storedPosition = getStoredPosition(
           activePosition.positionAddress,
         );
 
-        if (positionPrice !== null) {
-          buyEntryPrice = positionPrice;
-        }
+        positionCreatedAt = storedPosition?.createdAt;
 
-        if (
-          buyEntryPrice === undefined ||
-          !Number.isFinite(buyEntryPrice) ||
-          buyEntryPrice <= 0
-        ) {
-          throw new Error(
-            `[${SYMBOL}] SELL без buyEntryPrice. ` +
-            `Торговля заблокирована до восстановления цены покупки.`,
+        if (activePosition.side === "SELL") {
+          const positionPrice = getStoredBuyEntryPrice(
+            activePosition.positionAddress,
           );
+
+          if (positionPrice !== null) {
+            buyEntryPrice = positionPrice;
+          }
+
+          if (
+            buyEntryPrice === undefined ||
+            !Number.isFinite(buyEntryPrice) ||
+            buyEntryPrice <= 0
+          ) {
+            throw new Error(
+              `[${SYMBOL}] SELL без buyEntryPrice. ` +
+              `Торговля заблокирована до восстановления цены покупки.`,
+            );
+          }
         }
       }
 
@@ -145,6 +156,7 @@ export async function tradeLoop(config: DexCoinConfig) {
         tokenBalance,
         positions,
         buyEntryPrice,
+        positionCreatedAt,
       });
 
       logTradeTick({

@@ -1,23 +1,47 @@
 {
-  "B4mGqP9A4G5U5m1Q3WPzeipsmbMk1Xc5xwW9kPea5jyN": {
+  "F6xLm4rmojx248dbQUmGPgvA8QiFmADtzmNpjrACRRQE": {
     "side": "BUY",
     "buyEntryPrice": 0.0000107674951366138,
+    "targetPrice": 0.0000107674951366138,
     "symbol": "BAGSPAY",
     "tokenMint": "H8WTvo3ZXSYHJAcYqzCforbG8coR1FDAX2kHFfqHBAGS",
-    "poolAddress": "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA"
+    "poolAddress": "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA",
+    "createdAt": 1794417614481
   },
-  "AmWrwcNRNyCQiQcxJaEWzfRCccimNYV6vJEN75GkY6RN": {
+  "3sDP3Atf3PtEADRhWqULFxpvWadEHDzGwZfhy5ro7ZVf": {
     "side": "BUY",
     "buyEntryPrice": 0.0000877990836549645,
+    "targetPrice": 0.0000877990836549645,
     "symbol": "GATO",
     "tokenMint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
-    "poolAddress": "DnmL7vYnNTACb8e6a4EpbeeeNDW8hwp1EvQZ4BWKCgjK"
+    "poolAddress": "DnmL7vYnNTACb8e6a4EpbeeeNDW8hwp1EvQZ4BWKCgjK",
+    "createdAt": 1794417620335
   },
-  "Gkn2TQFL5XPiCMdCG1Gir2ygD8bYfb6xvRuc8nVmw7DB": {
+  "5f5aKoq4bPnQ9Y6s4cZ9BRcaSh2gfPm7zevnpq7gYjKD": {
     "side": "BUY",
+    "buyEntryPrice": 0.0000149371794052369,
+    "targetPrice": 0.0000149371794052369,
+    "symbol": "CHOO",
+    "tokenMint": "EJAxERvKU4kEVXn3NarjvRtgaMaJyP9ZuMeKA7JJpump",
+    "poolAddress": "9JZrcAScnGQp7DSV4kBWfmGH2ao31sz5JbJ8cnpZ9uwv",
+    "createdAt": 1794417634242
+  },
+  "EC661iNxAxnD9WekRqXxtswLb1TmJwxzrWzWxepPr1nR": {
+    "side": "BUY",
+    "buyEntryPrice": 0.0001109614021660616,
+    "targetPrice": 0.0001109614021660616,
+    "symbol": "MASK",
+    "tokenMint": "HuAXPyDWDaMYFKuwQHpqL1oPnj93zdzWmtvFGzCeCUa7",
+    "poolAddress": "D1rDVEp78cvBctREKZmpLdRnPNe3Ufmgq6ZjMYye9kmq",
+    "createdAt": 1794417644470
+  },
+  "BBnp6mTbPeCyWJXAZtd2fozAE1vVaG6u8VXzevFcLFt9": {
+    "side": "SELL",
     "buyEntryPrice": 0.0000109326991859354,
+    "targetPrice": 0.0000156177840152774,
     "symbol": "NIO",
     "tokenMint": "7SL2VnfYsChvog5oQY9Nmtqu1wceaMiQzWoqoLQpump",
-    "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV"
+    "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV",
+    "createdAt": 1794417941695
   }
 }

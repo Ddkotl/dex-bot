@@ -1,3 +1,4 @@
+
 import type { DexCoinConfig } from "../config";
 import type { Dlmmpresentation } from "../get_info/get_positions";
 
@@ -33,6 +34,13 @@ export type Action =
       stopLossPrice: number;
     }
   | {
+      type: "REFRESH_ORDER";
+      positionAddress: string;
+      side: "BUY" | "SELL";
+      price: number;
+      buyEntryPrice?: number;
+    }
+  | {
       type: "NOOP";
       reason: string;
     };
@@ -54,6 +62,7 @@ interface DecideInput {
   tokenBalance: number;
   positions: Dlmmpresentation[];
   buyEntryPrice?: number | undefined;
+  positionCreatedAt?: number | undefined;
 }
 
 function noop(reason: string): Action {
@@ -68,6 +77,7 @@ export function decide(i: DecideInput): Action {
     tokenBalance,
     positions,
     buyEntryPrice,
+    positionCreatedAt,
   } = i;
 
   if (positions.length > 1) {
@@ -80,18 +90,24 @@ export function decide(i: DecideInput): Action {
 
   const position = positions[0];
 
-  // STOP LOSS проверяется до обычной логики переключения.
+  // --------------------------------------------------
+  // STOP LOSS
+  // --------------------------------------------------
+
   if (position?.side === "SELL") {
     if (
       buyEntryPrice === undefined ||
       !Number.isFinite(buyEntryPrice) ||
       buyEntryPrice <= 0
     ) {
-      return noop("SELL заблокирована: отсутствует корректная цена покупки.");
+      return noop(
+        "SELL заблокирована: отсутствует корректная цена покупки.",
+      );
     }
 
     if (position.state !== "QUOTE_ONLY") {
-      const stopLossPrice = buyEntryPrice * (1 - c.STOP_LOSS_PCT / 100);
+      const stopLossPrice =
+        buyEntryPrice * (1 - c.STOP_LOSS_PCT / 100);
 
       if (m.currentPrice <= stopLossPrice) {
         return {
@@ -105,9 +121,15 @@ export function decide(i: DecideInput): Action {
     }
   }
 
-  const buyPrice = m.localMinPrice + c.BUY_RANGE * m.localRange;
+  // --------------------------------------------------
+  // TARGET PRICES
+  // --------------------------------------------------
 
-  const sellPrice = m.localMinPrice + c.SELL_RANGE * m.localRange;
+  const buyPrice =
+    m.localMinPrice + c.BUY_RANGE * m.localRange;
+
+  const sellPrice =
+    m.localMinPrice + c.SELL_RANGE * m.localRange;
 
   if (
     !Number.isFinite(buyPrice) ||
@@ -118,8 +140,77 @@ export function decide(i: DecideInput): Action {
     return noop("Некорректная целевая цена.");
   }
 
+  // --------------------------------------------------
+  // ORDER TIMEOUT
+  // --------------------------------------------------
+
+  if (
+    position &&
+    positionCreatedAt !== undefined &&
+    Number.isFinite(positionCreatedAt) &&
+    positionCreatedAt > 0 &&
+    Date.now() - positionCreatedAt >= c.ORDER_TIMEOUT_MS
+  ) {
+    const isUnfilledBuy =
+      position.side === "BUY" &&
+      position.state === "QUOTE_ONLY";
+
+    const isUnfilledSell =
+      position.side === "SELL" &&
+      position.state === "TOKEN_ONLY";
+
+    if (isUnfilledBuy || isUnfilledSell) {
+      // После тайм-аута не открываем новый ордер,
+      // если свежий анализ больше не подходит.
+      if (
+        !m.isSideways ||
+        m.rangePct > c.MAX_RANGE_PCT ||
+        m.rangePct < c.MIN_RANGE_PCT
+      ) {
+        return noop(
+          "ORDER TIMEOUT: рынок не подходит для обновления ордера. " +
+          "Старая позиция остаётся без изменений.",
+        );
+      }
+
+      if (isUnfilledBuy) {
+        return {
+          type: "REFRESH_ORDER",
+          positionAddress: position.positionAddress,
+          side: "BUY",
+          price: buyPrice,
+        };
+      }
+
+      if (
+        buyEntryPrice === undefined ||
+        !Number.isFinite(buyEntryPrice) ||
+        buyEntryPrice <= 0
+      ) {
+        return noop(
+          "ORDER TIMEOUT: невозможно обновить SELL без buyEntryPrice.",
+        );
+      }
+
+      return {
+        type: "REFRESH_ORDER",
+        positionAddress: position.positionAddress,
+        side: "SELL",
+        price: sellPrice,
+        buyEntryPrice,
+      };
+    }
+  }
+
+  // --------------------------------------------------
+  // POSITION SWITCHES
+  // --------------------------------------------------
+
   if (position) {
-    if (position.side === "BUY" && position.state === "TOKEN_ONLY") {
+    if (
+      position.side === "BUY" &&
+      position.state === "TOKEN_ONLY"
+    ) {
       return {
         type: "SWITCH_TO_SELL",
         positionAddress: position.positionAddress,
@@ -128,7 +219,10 @@ export function decide(i: DecideInput): Action {
       };
     }
 
-    if (position.side === "SELL" && position.state === "QUOTE_ONLY") {
+    if (
+      position.side === "SELL" &&
+      position.state === "QUOTE_ONLY"
+    ) {
       return {
         type: "SWITCH_TO_BUY",
         positionAddress: position.positionAddress,
@@ -140,11 +234,18 @@ export function decide(i: DecideInput): Action {
     return noop("Ожидание полного исполнения DLMM-позиции.");
   }
 
+  // --------------------------------------------------
+  // NEW POSITIONS
+  // --------------------------------------------------
+
   if (!m.isSideways) {
     return noop("Рынок не находится во флэте.");
   }
 
-  if (m.rangePct > c.MAX_RANGE_PCT || m.rangePct < c.MIN_RANGE_PCT) {
+  if (
+    m.rangePct > c.MAX_RANGE_PCT ||
+    m.rangePct < c.MIN_RANGE_PCT
+  ) {
     return noop("Диапазон рынка вне допустимых границ.");
   }
 
