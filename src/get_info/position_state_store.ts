@@ -6,6 +6,15 @@ export type PositionSide = "BUY" | "SELL";
 export interface StoredPosition {
   side: PositionSide;
   buyEntryPrice?: number;
+  symbol: string;
+  tokenMint: string;
+  poolAddress: string;
+}
+
+export interface PositionMetadata {
+  symbol: string;
+  tokenMint: string;
+  poolAddress: string;
 }
 
 type Store = Record<string, StoredPosition>;
@@ -14,19 +23,11 @@ const DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DIR, "position_state.json");
 
 function readStore(): Store {
-  console.log("[POSITION STORE] cwd:", process.cwd());
-  console.log("[POSITION STORE] file:", FILE);
-  console.log("[POSITION STORE] exists:", fs.existsSync(FILE));
-
   if (!fs.existsSync(FILE)) {
-    console.log("[POSITION STORE] Файл не найден, возвращаю пустое состояние");
     return {};
   }
 
   const raw = fs.readFileSync(FILE, "utf8");
-
-  console.log("[POSITION STORE] raw:", raw);
-
   const parsed: unknown = JSON.parse(raw);
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -46,6 +47,10 @@ function writeStore(store: Store): void {
   fs.renameSync(temp, FILE);
 }
 
+function isValidPrice(price: unknown): price is number {
+  return typeof price === "number" && Number.isFinite(price) && price > 0;
+}
+
 export function getStoredPosition(
   positionAddress: string,
 ): StoredPosition | null {
@@ -55,14 +60,7 @@ export function getStoredPosition(
 export function getStoredPositionSide(
   positionAddress: string,
 ): PositionSide | null {
-  const store = readStore();
-
-  console.log("[POSITION STORE] requested address:", positionAddress);
-  console.log("[POSITION STORE] available addresses:", Object.keys(store));
-
-  const position = store[positionAddress];
-
-  console.log("[POSITION STORE] found position:", position);
+  const position = getStoredPosition(positionAddress);
 
   return position?.side ?? null;
 }
@@ -70,23 +68,76 @@ export function getStoredPositionSide(
 export function getStoredBuyEntryPrice(positionAddress: string): number | null {
   const price = getStoredPosition(positionAddress)?.buyEntryPrice;
 
-  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+  return isValidPrice(price) ? price : null;
+}
+
+/**
+ * Возвращает все сохранённые записи указанного пула.
+ * В том числе записи BUY, которые уже закрыты on-chain,
+ * но ещё не перенесены в новую SELL.
+ */
+export function getStoredPositionsForPool(
+  poolAddress: string,
+): Array<{ address: string; position: StoredPosition }> {
+  const store = readStore();
+
+  return Object.entries(store)
+    .filter(([, position]) => position.poolAddress === poolAddress)
+    .map(([address, position]) => ({
+      address,
+      position,
+    }));
+}
+
+/**
+ * Ищет цену покупки среди сохранённых записей пула.
+ *
+ * Если цены в нескольких записях различаются,
+ * возвращает null: выбирать одну из них наугад нельзя.
+ */
+export function getStoredBuyEntryPriceForPool(
+  poolAddress: string,
+): number | null {
+  const entries = getStoredPositionsForPool(poolAddress);
+
+  const prices = entries
+    .map(({ position }) => position.buyEntryPrice)
+    .filter(isValidPrice);
+
+  if (prices.length === 0) {
     return null;
   }
 
-  return price;
+  const uniquePrices = [...new Set(prices)];
+
+  if (uniquePrices.length !== 1) {
+    console.error(
+      `[POSITION STORE] Несколько разных buyEntryPrice для пула ${poolAddress}:`,
+      uniquePrices,
+    );
+
+    return null;
+  }
+
+  return uniquePrices[0] ?? null;
 }
 
+/**
+ * Сохраняет или перезаписывает состояние позиции.
+ * Ключ — адрес DLMM-позиции.
+ */
 export function savePosition(
   positionAddress: string,
   side: PositionSide,
+  metadata: PositionMetadata,
   buyEntryPrice?: number,
 ): void {
-  if (
-    buyEntryPrice !== undefined &&
-    (!Number.isFinite(buyEntryPrice) || buyEntryPrice <= 0)
-  ) {
+  if (buyEntryPrice !== undefined && !isValidPrice(buyEntryPrice)) {
     throw new Error(`Некорректная цена BUY: ${buyEntryPrice}`);
+  }
+
+  if (!metadata.symbol || !metadata.tokenMint || !metadata.poolAddress) {
+    throw new Error("Не заполнены метаданные позиции");
   }
 
   const store = readStore();
@@ -94,26 +145,82 @@ export function savePosition(
   store[positionAddress] = {
     side,
     ...(buyEntryPrice !== undefined ? { buyEntryPrice } : {}),
+    symbol: metadata.symbol,
+    tokenMint: metadata.tokenMint,
+    poolAddress: metadata.poolAddress,
   };
 
   writeStore(store);
+
+  console.log(
+    `[POSITION STORE] SAVE ${metadata.symbol} ${side} ` +
+      `${positionAddress} entry=${buyEntryPrice ?? "нет"}`,
+  );
 }
 
+/**
+ * Удаляет запись конкретной позиции.
+ */
 export function removePosition(positionAddress: string): void {
   const store = readStore();
+
+  if (!(positionAddress in store)) {
+    return;
+  }
+
+  const oldPosition = store[positionAddress];
 
   delete store[positionAddress];
 
   writeStore(store);
+
+  console.log(
+    `[POSITION STORE] REMOVE ${oldPosition?.symbol ?? "UNKNOWN"} ` +
+      `${positionAddress}`,
+  );
 }
 
-// Совместимость со старым get_positions.ts и старым execute.ts.
+/**
+ * Оставлена для совместимости со старым кодом.
+ * Не вызывай её автоматически после одного ответа RPC:
+ * можно удалить цену входа незавершённой сделки.
+ */
+export function prunePositionsForPool(
+  poolAddress: string,
+  activeAddresses: ReadonlySet<string>,
+): void {
+  const store = readStore();
+
+  let changed = false;
+
+  for (const [address, position] of Object.entries(store)) {
+    if (position.poolAddress === poolAddress && !activeAddresses.has(address)) {
+      console.warn(
+        `[POSITION STORE] STALE RECORD: ${position.symbol} ${address}`,
+      );
+
+      // Намеренно не удаляем автоматически.
+      // Удаление выполняется после успешного перехода сделки.
+    }
+  }
+
+  if (changed) {
+    writeStore(store);
+  }
+}
+
+// Совместимость со старым API.
 export function savePositionSide(
   positionAddress: string,
   side: PositionSide,
   buyEntryPrice?: number,
+  metadata?: PositionMetadata,
 ): void {
-  savePosition(positionAddress, side, buyEntryPrice);
+  if (!metadata) {
+    throw new Error("savePositionSide: необходимо передать PositionMetadata");
+  }
+
+  savePosition(positionAddress, side, metadata, buyEntryPrice);
 }
 
 export function removePositionSide(positionAddress: string): void {

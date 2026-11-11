@@ -1,8 +1,18 @@
+
 import DLMM from "@meteora-ag/dlmm";
 import { PublicKey } from "@solana/web3.js";
+
 import { pub_wallet_connection } from "../client/pub_wallet_connect";
-import { getStoredPositionSide } from "./position_state_store";
-export type PositionState = "QUOTE_ONLY" | "TOKEN_ONLY" | "MIXED" | "EMPTY";
+
+import {
+  getStoredPositionSide,
+} from "./position_state_store";
+
+export type PositionState =
+  | "QUOTE_ONLY"
+  | "TOKEN_ONLY"
+  | "MIXED"
+  | "EMPTY";
 
 export type PositionSide = "BUY" | "SELL" | "UNKNOWN";
 
@@ -44,13 +54,16 @@ export async function getActiveLimitPositions(
   const isBaseY = pool.lbPair.tokenYMint.equals(tokenPubKey);
 
   if (!isBaseX && !isBaseY) {
-    throw new Error("TOKEN_MINT не найден в tokenXMint/tokenYMint пула");
+    throw new Error(
+      "TOKEN_MINT не найден в tokenXMint/tokenYMint пула",
+    );
   }
 
   const { userPositions, activeBin } =
     await pool.getPositionsByUserAndLbPair(userPubKey);
 
   const activeBinId = Number(activeBin.binId);
+
   const result: Dlmmpresentation[] = [];
 
   const tokenTolerance = 2 / 10 ** tokenDecimals;
@@ -59,40 +72,52 @@ export async function getActiveLimitPositions(
   for (const position of userPositions) {
     const data = position.positionData;
 
-    const totalX = rawToUi(data.totalXAmount, pool.tokenX.mint.decimals);
+    const positionAddress = position.publicKey.toBase58();
 
-    const totalY = rawToUi(data.totalYAmount, pool.tokenY.mint.decimals);
+    const totalX = rawToUi(
+      data.totalXAmount,
+      pool.tokenX.mint.decimals,
+    );
 
-    const feeX = rawToUi(data.feeX, pool.tokenX.mint.decimals);
+    const totalY = rawToUi(
+      data.totalYAmount,
+      pool.tokenY.mint.decimals,
+    );
 
-    const feeY = rawToUi(data.feeY, pool.tokenY.mint.decimals);
+    const feeX = rawToUi(
+      data.feeX,
+      pool.tokenX.mint.decimals,
+    );
+
+    const feeY = rawToUi(
+      data.feeY,
+      pool.tokenY.mint.decimals,
+    );
 
     const totalTokens = isBaseX ? totalX : totalY;
     const totalQuote = isBaseX ? totalY : totalX;
+
     const feeTokens = isBaseX ? feeX : feeY;
     const feeQuote = isBaseX ? feeY : feeX;
 
     const bins = data.positionBinData ?? [];
 
-    const binIds = bins.map((bin) => Number(bin.binId)).filter(Number.isFinite);
+    const binIds = bins
+      .map((bin) => Number(bin.binId))
+      .filter(Number.isFinite);
 
-    const firstBinId = binIds.length > 0 ? Math.min(...binIds) : null;
+    const firstBinId =
+      binIds.length > 0 ? Math.min(...binIds) : null;
 
-    const lastBinId = binIds.length > 0 ? Math.max(...binIds) : null;
-
-    const storedSide = getStoredPositionSide(position.publicKey.toBase58());
-
-    if (!storedSide) {
-      throw new Error(
-        `Не найден side для позиции ${position.publicKey.toBase58()}`,
-      );
-    }
-
-    const side: PositionSide = storedSide;
+    const lastBinId =
+      binIds.length > 0 ? Math.max(...binIds) : null;
 
     let state: PositionState;
 
-    if (totalTokens <= tokenTolerance && totalQuote <= quoteTolerance) {
+    if (
+      totalTokens <= tokenTolerance &&
+      totalQuote <= quoteTolerance
+    ) {
       state = "EMPTY";
     } else if (totalTokens <= tokenTolerance) {
       state = "QUOTE_ONLY";
@@ -102,8 +127,29 @@ export async function getActiveLimitPositions(
       state = "MIXED";
     }
 
+    // Не удаляем запись EMPTY из JSON.
+    // Она может содержать цену BUY, ожидающую переноса в SELL.
+    if (state === "EMPTY") {
+      console.log(
+        `[POSITION] ${positionAddress} EMPTY — ` +
+        `пропускаем, сохранённое состояние не удаляем`,
+      );
+
+      continue;
+    }
+
+    const storedSide = getStoredPositionSide(positionAddress);
+
+    if (!storedSide) {
+      throw new Error(
+        `Не найден side для активной позиции ${positionAddress}`,
+      );
+    }
+
+    const side: PositionSide = storedSide;
+
     result.push({
-      positionAddress: position.publicKey.toBase58(),
+      positionAddress,
       totalTokens,
       totalQuote,
       feeTokens,
@@ -116,6 +162,10 @@ export async function getActiveLimitPositions(
       activeBinId,
     });
   }
+
+  console.log(
+    `[POSITION] Pool=${poolAddress} Active=${result.length}`,
+  );
 
   return result;
 }

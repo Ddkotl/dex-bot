@@ -11,6 +11,7 @@ export type Action =
       type: "OPEN_SELL";
       price: number;
       tokens: number;
+      buyEntryPrice: number;
     }
   | {
       type: "SWITCH_TO_BUY";
@@ -79,22 +80,28 @@ export function decide(i: DecideInput): Action {
 
   const position = positions[0];
 
-  // Стоп проверяем до обычной логики переключения.
-  if (
-    position?.side === "SELL" &&
-    position.state !== "QUOTE_ONLY" &&
-    buyEntryPrice !== undefined
-  ) {
-    const stopLossPrice = buyEntryPrice * (1 - c.STOP_LOSS_PCT / 100);
+  // STOP LOSS проверяется до обычной логики переключения.
+  if (position?.side === "SELL") {
+    if (
+      buyEntryPrice === undefined ||
+      !Number.isFinite(buyEntryPrice) ||
+      buyEntryPrice <= 0
+    ) {
+      return noop("SELL заблокирована: отсутствует корректная цена покупки.");
+    }
 
-    if (m.currentPrice <= stopLossPrice) {
-      return {
-        type: "STOP_LOSS",
-        positionAddress: position.positionAddress,
-        currentPrice: m.currentPrice,
-        buyEntryPrice,
-        stopLossPrice,
-      };
+    if (position.state !== "QUOTE_ONLY") {
+      const stopLossPrice = buyEntryPrice * (1 - c.STOP_LOSS_PCT / 100);
+
+      if (m.currentPrice <= stopLossPrice) {
+        return {
+          type: "STOP_LOSS",
+          positionAddress: position.positionAddress,
+          currentPrice: m.currentPrice,
+          buyEntryPrice,
+          stopLossPrice,
+        };
+      }
     }
   }
 
@@ -144,10 +151,21 @@ export function decide(i: DecideInput): Action {
   const tokenValue = tokenBalance * m.currentPrice;
 
   if (tokenValue >= c.MIN_NOTIONAL) {
+    if (
+      buyEntryPrice === undefined ||
+      !Number.isFinite(buyEntryPrice) ||
+      buyEntryPrice <= 0
+    ) {
+      return noop(
+        "Есть токены, но цена их покупки неизвестна. OPEN_SELL запрещён.",
+      );
+    }
+
     return {
       type: "OPEN_SELL",
       price: sellPrice,
       tokens: tokenBalance,
+      buyEntryPrice,
     };
   }
 

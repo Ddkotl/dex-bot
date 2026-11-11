@@ -1,10 +1,23 @@
 {
-  "JE8uCSw1KFxW3t1n1M4XYBgv5RmKUjakfNHNKFkM7We": {
+  "B4mGqP9A4G5U5m1Q3WPzeipsmbMk1Xc5xwW9kPea5jyN": {
     "side": "BUY",
-    "buyEntryPrice": 0.0000132756244162493
+    "buyEntryPrice": 0.0000107674951366138,
+    "symbol": "BAGSPAY",
+    "tokenMint": "H8WTvo3ZXSYHJAcYqzCforbG8coR1FDAX2kHFfqHBAGS",
+    "poolAddress": "8bZKAjGx4H8JGnPU2yd4yb9hYikqviXa6kt9CUtKEQMA"
   },
-  "B1x7q2g2J6CkFQYegiVCXJwMBqwfwpPgrDmnLMfvFnKB": {
+  "AmWrwcNRNyCQiQcxJaEWzfRCccimNYV6vJEN75GkY6RN": {
     "side": "BUY",
-    "buyEntryPrice": 0.00013359266789938972
+    "buyEntryPrice": 0.0000877990836549645,
+    "symbol": "GATO",
+    "tokenMint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
+    "poolAddress": "DnmL7vYnNTACb8e6a4EpbeeeNDW8hwp1EvQZ4BWKCgjK"
+  },
+  "Gkn2TQFL5XPiCMdCG1Gir2ygD8bYfb6xvRuc8nVmw7DB": {
+    "side": "BUY",
+    "buyEntryPrice": 0.0000109326991859354,
+    "symbol": "NIO",
+    "tokenMint": "7SL2VnfYsChvog5oQY9Nmtqu1wceaMiQzWoqoLQpump",
+    "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV"
   }
 }

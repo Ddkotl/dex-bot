@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 
 import { analyzeMarket } from "../actions/analize_market";
@@ -6,6 +7,8 @@ import { getActiveLimitPositions } from "../get_info/get_positions";
 
 import {
   getStoredBuyEntryPrice,
+  getStoredBuyEntryPriceForPool,
+  getStoredPositionsForPool,
 } from "../get_info/position_state_store";
 
 import type { DexCoinConfig } from "../config";
@@ -74,23 +77,65 @@ export async function tradeLoop(config: DexCoinConfig) {
       const quoteBalance = balance.sol + balance.wsol;
       const tokenBalance = balance.token ?? 0;
 
-      let buyEntryPrice: number | undefined;
-
       const activePosition = positions[0];
 
+      const storedPositions =
+        getStoredPositionsForPool(POOL_ADDRESS);
+
+      let buyEntryPrice =
+        getStoredBuyEntryPriceForPool(POOL_ADDRESS) ??
+        undefined;
+
+      // Если есть активная SELL, цена входа обязательна.
       if (activePosition?.side === "SELL") {
-        const storedPrice = getStoredBuyEntryPrice(
+        const positionPrice = getStoredBuyEntryPrice(
           activePosition.positionAddress,
         );
 
-        if (storedPrice === null) {
+        if (positionPrice !== null) {
+          buyEntryPrice = positionPrice;
+        }
+
+        if (
+          buyEntryPrice === undefined ||
+          !Number.isFinite(buyEntryPrice) ||
+          buyEntryPrice <= 0
+        ) {
           throw new Error(
-            "SELL открыта, но buyEntryPrice отсутствует. " +
-            "Новые действия запрещены до проверки состояния.",
+            `[${SYMBOL}] SELL без buyEntryPrice. ` +
+            `Торговля заблокирована до восстановления цены покупки.`,
+          );
+        }
+      }
+
+      // Если активной позиции нет, проверяем сохранённые записи.
+      if (!activePosition && storedPositions.length > 0) {
+        const hasStoredSell = storedPositions.some(
+          ({ position }) => position.side === "SELL",
+        );
+
+        if (hasStoredSell) {
+          throw new Error(
+            `[${SYMBOL}] В JSON есть SELL, но активная DLMM-позиция ` +
+            `не найдена. Возможен незавершённый выход или ошибка RPC. ` +
+            `Автоматическая торговля заблокирована для проверки.`,
           );
         }
 
-        buyEntryPrice = storedPrice;
+        const hasStoredBuy = storedPositions.some(
+          ({ position }) => position.side === "BUY",
+        );
+
+        if (
+          hasStoredBuy &&
+          tokenBalance * market.currentPrice < config.MIN_NOTIONAL
+        ) {
+          throw new Error(
+            `[${SYMBOL}] Найдена сохранённая BUY без активной позиции, ` +
+            `но токенов недостаточно для SELL. ` +
+            `Проверь состояние кошелька и position_state.json.`,
+          );
+        }
       }
 
       const action = decide({
