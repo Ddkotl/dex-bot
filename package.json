@@ -8,7 +8,8 @@
     "rent:log": "tsx scripts/rent-log.ts",
     "rent:cleanup": "tsx scripts/rent-cleanup.ts",
     "swap:usdc-sol": "tsx scripts/swap-usdc-sol.ts",
-    "swap:sol-usdc": "tsx scripts/swap-sol-usdc.ts"
+    "swap:sol-usdc": "tsx scripts/swap-sol-usdc.ts",
+    "type": " tsc --noEmit"
   },
   "repository": {
     "type": "git",

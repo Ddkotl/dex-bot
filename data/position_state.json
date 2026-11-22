@@ -1,22 +1,4 @@
 {
-  "34U3x7pZhCEkp3cB22hDggt5Yf4FXzeWpDAxDCgtmBtL": {
-    "side": "BUY",
-    "buyEntryPrice": 0.04210899574045134,
-    "targetPrice": 0.04210899574045134,
-    "symbol": "wNEAR",
-    "tokenMint": "3ZLekZYq2qkZiSpnSvabjit34tUkjSwD1JFuW9as9wBG",
-    "poolAddress": "B9kcGT9QgjjVwTbyurvhvNiEFi6aYxupXJBFbvdDRiL9",
-    "createdAt": 1795092820901
-  },
-  "FxuJRPSTiqzoenvD8EG5TMZ7nryDViuXYoRpqySUZp38": {
-    "side": "SELL",
-    "buyEntryPrice": 0.0000100891933433973,
-    "targetPrice": 0.0000182574680390288,
-    "symbol": "NIO",
-    "tokenMint": "7SL2VnfYsChvog5oQY9Nmtqu1wceaMiQzWoqoLQpump",
-    "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV",
-    "createdAt": 1795093909318
-  },
   "24B5YsWj2b43Dx8RKpys7WDHvhd86NCwJtf3EEZK7bvX": {
     "side": "SELL",
     "buyEntryPrice": 0.000340985131481642,
@@ -26,13 +8,67 @@
     "poolAddress": "BkocTzcvrhjwy38EYVyvhhVydeyqedasLVCJ8Z2HFyCN",
     "createdAt": 1795100435160
   },
-  "6YHoVXLJS1dXjgjiKTKj39EGxc1juPs5Rp7tpW99RwtG": {
+  "9P82dWdCukkpX1bZB26uLdXdnxrkjxjjsgGdYTcno9vi": {
+    "side": "BUY",
+    "buyEntryPrice": 0.03921550235983206,
+    "targetPrice": 0.03921550235983206,
+    "symbol": "wNEAR",
+    "tokenMint": "3ZLekZYq2qkZiSpnSvabjit34tUkjSwD1JFuW9as9wBG",
+    "poolAddress": "B9kcGT9QgjjVwTbyurvhvNiEFi6aYxupXJBFbvdDRiL9",
+    "createdAt": 1795266230157
+  },
+  "5TwRmrTxaW4T3j4WY1XEGgxRA7X6zf4VojGt5FTGAwXK": {
     "side": "SELL",
-    "buyEntryPrice": 0.0002263487599194975,
-    "targetPrice": 0.00024606752734009557,
+    "buyEntryPrice": 0.0000174965891649376,
+    "targetPrice": 0.0000278412228876344,
+    "symbol": "NIO",
+    "tokenMint": "7SL2VnfYsChvog5oQY9Nmtqu1wceaMiQzWoqoLQpump",
+    "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV",
+    "createdAt": 1795284699534
+  },
+  "EXn4gAPew5t6jjhYGSochFaTcGma7iNUBpZKbxJdgLKj": {
+    "side": "BUY",
+    "buyEntryPrice": 0.00021185139096103778,
+    "targetPrice": 0.00021185139096103778,
     "symbol": "MASK",
     "tokenMint": "HuAXPyDWDaMYFKuwQHpqL1oPnj93zdzWmtvFGzCeCUa7",
     "poolAddress": "D1rDVEp78cvBctREKZmpLdRnPNe3Ufmgq6ZjMYye9kmq",
-    "createdAt": 1795104003452
+    "createdAt": 1795342563255
+  },
+  "Uq3wYoJs6ma5TtEyXqZ23TvKAkGYYU8Y28eo5infGbW": {
+    "side": "BUY",
+    "buyEntryPrice": 0.0001791275567029163,
+    "targetPrice": 0.0001791275567029163,
+    "symbol": "ZCAT",
+    "tokenMint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+    "poolAddress": "GuPbekwP9MqB23CghhiMQZTaigPdUJooovo1neCErhM8",
+    "createdAt": 1795352922196
+  },
+  "3gWExXjMY6JRDqxk6Q8oNj36yDFdW1fV8sTVipr73HkM": {
+    "side": "BUY",
+    "buyEntryPrice": 0.0002615919711215866,
+    "targetPrice": 0.0002615919711215866,
+    "symbol": "TROLL",
+    "tokenMint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
+    "poolAddress": "Cgnuirsk5dQ9Ka1Grnru7J8YW1sYncYUjiXvYxT7G4iZ",
+    "createdAt": 1795352928415
+  },
+  "5vQro1dpy1fD6vy93aYydZR9hQ1RjBgetkvw4tbF8cSJ": {
+    "side": "BUY",
+    "buyEntryPrice": 0.00023145831796435833,
+    "targetPrice": 0.00023145831796435833,
+    "symbol": "CATE",
+    "tokenMint": "Ai66LHZG9MCzg1WKdawwqduVAXpNDUuV8M3uyq5ppump",
+    "poolAddress": "qhJ7kLjrE68sbDF11CpwMt3P9rqiwZtretM5ZzeAX6o",
+    "createdAt": 1795352934546
+  },
+  "Ey22K7TQZvThyC2pjwGsnhmij5MGC1smaVPAWED6kf7Y": {
+    "side": "BUY",
+    "buyEntryPrice": 0.003278593769907787,
+    "targetPrice": 0.003278593769907787,
+    "symbol": "MET",
+    "tokenMint": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+    "poolAddress": "AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x",
+    "createdAt": 1795352941391
   }
 }
