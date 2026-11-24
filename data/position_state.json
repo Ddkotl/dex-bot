@@ -36,15 +36,6 @@
     "poolAddress": "AsTbb4jVBh1SUEPRHqZ87aM39sdy8DDUZBvCvwBmMyYV",
     "createdAt": 1795490106113
   },
-  "FkJMq49sCGoNUJz8m7BZXm5L3sg36ZMKWMyQ1YjAg7Fm": {
-    "side": "SELL",
-    "buyEntryPrice": 0.0002396510134386064,
-    "targetPrice": 0.0002105222108115924,
-    "symbol": "MASK",
-    "tokenMint": "HuAXPyDWDaMYFKuwQHpqL1oPnj93zdzWmtvFGzCeCUa7",
-    "poolAddress": "D1rDVEp78cvBctREKZmpLdRnPNe3Ufmgq6ZjMYye9kmq",
-    "createdAt": 1795513611119
-  },
   "59QFZwBuhEn92JkPeySmUM2zx8VG1DyZBZG1qhWGFvRX": {
     "side": "SELL",
     "buyEntryPrice": 0.04107643486921593,
@@ -62,14 +53,5 @@
     "tokenMint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
     "poolAddress": "Cgnuirsk5dQ9Ka1Grnru7J8YW1sYncYUjiXvYxT7G4iZ",
     "createdAt": 1795527125488
-  },
-  "Bvb9Ds4YKE5wT2ZoSoVUP2HLCZmRcP8yzd1rDxgmM3to": {
-    "side": "SELL",
-    "buyEntryPrice": 0.0031157673451907074,
-    "targetPrice": 0.003067587621875893,
-    "symbol": "MET",
-    "tokenMint": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
-    "poolAddress": "AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x",
-    "createdAt": 1795528632002
   }
 }
